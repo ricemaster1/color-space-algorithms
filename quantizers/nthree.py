@@ -1,0 +1,105 @@
+from PIL import Image
+import webcolors
+import argparse
+import os
+
+# ARMLite color names
+ARMLITE_COLORS = [
+    'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'black',
+    'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse',
+    'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan', 'darkblue',
+    'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgreen', 'darkgrey', 'darkkhaki', 'darkmagenta',
+    'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon', 'darkseagreen',
+    'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise', 'darkviolet', 'deeppink',
+    'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue', 'firebrick', 'floralwhite', 'forestgreen',
+    'fuchsia', 'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'gray', 'green', 'greenyellow',
+    'grey', 'honeydew', 'hotpink', 'indianred', 'indigo', 'ivory', 'khaki', 'lavender',
+    'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan',
+    'lightgoldenrodyellow', 'lightgray', 'lightgreen', 'lightgrey', 'lightpink', 'lightsalmon',
+    'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue',
+    'lightyellow', 'lime', 'limegreen', 'linen', 'magenta', 'maroon', 'mediumaquamarine',
+    'mediumblue', 'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue',
+    'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream',
+    'mistyrose', 'moccasin', 'navajowhite', 'navy', 'oldlace', 'olive', 'olivedrab', 'orange',
+    'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred',
+    'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue', 'purple', 'red', 'rosybrown',
+    'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna',
+    'silver', 'skyblue', 'slateblue', 'slategray', 'slategrey', 'snow', 'springgreen',
+    'steelblue', 'tan', 'teal', 'thistle', 'tomato', 'turquoise', 'violet', 'wheat', 'white',
+    'whitesmoke', 'yellow', 'yellowgreen'
+]
+
+ARMLITE_RGB = {name: webcolors.name_to_rgb(name) for name in ARMLITE_COLORS}
+
+def top_n_colors(rgb, n=3):
+    """Return the top-N closest ARMLite colors to the given RGB."""
+    distances = []
+    for name, color_rgb in ARMLITE_RGB.items():
+        dist = sum((c1 - c2) ** 2 for c1, c2 in zip(rgb, color_rgb))
+        distances.append((dist, name))
+    distances.sort(key=lambda x: x[0])
+    return [name for _, name in distances[:n]]
+
+def select_best_color(x, y, pixels, width, height, n=3):
+    """Pick the best color for a pixel based on neighbors and top-N candidates."""
+    candidates = top_n_colors(pixels[x, y], n)
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Compare against 4-connected neighbors
+    neighbor_colors = []
+    for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < width and 0 <= ny < height:
+            neighbor_colors.append(pixels[nx, ny])
+
+    best = candidates[0]
+    min_total_dist = float('inf')
+    for candidate in candidates:
+        candidate_rgb = ARMLITE_RGB[candidate]
+        total_dist = sum(sum((c1 - c2) ** 2 for c1, c2 in zip(candidate_rgb, n_rgb)) for n_rgb in neighbor_colors)
+        if total_dist < min_total_dist:
+            min_total_dist = total_dist
+            best = candidate
+    return best
+
+def process_image(image_path, output_path):
+    img = Image.open(image_path).convert('RGB')
+    img = img.resize((128, 96))
+    pixels = img.load()
+    width, height = img.size
+
+    lines = [
+        '; === Fullscreen Sprite ===',
+        '    MOV R0, #2',
+        '    STR R0, .Resolution',
+        '    MOV R1, #.PixelScreen',
+        '    MOV R6, #512 ; row stride (128 * 4)'
+    ]
+
+    for y in range(height):
+        for x in range(width):
+            offset = ((y * width) + x) * 4
+            addr_line = f'    MOV R5, #{offset}\n    ADD R4, R1, R5'
+            color_name = select_best_color(x, y, pixels, width, height, n=3)
+            pixels[x, y] = ARMLITE_RGB[color_name]  # optional: update pixels
+            write_line = f'    MOV R0, #.{color_name}\n    STR R0, [R4]   ; Pixel ({x},{y})'
+            lines.append(addr_line)
+            lines.append(write_line)
+
+    lines.append('    HALT')
+    with open(output_path, 'w') as f:
+        f.write('\n'.join(lines))
+    print(f"Assembly sprite file written to {output_path}")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='ARMLite context-aware color quantizer')
+    parser.add_argument('image', help='Path to input image')
+    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.image):
+        print("Image not found.")
+        exit(1)
+
+    process_image(args.image, args.output)
