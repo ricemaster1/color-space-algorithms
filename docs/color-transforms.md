@@ -22,6 +22,7 @@ Exports HSV or HSL channels with custom weighting.
 python algorithms/color_transforms/rgb_to_hsv_hsl.py art.png --space hsl --weights 1,0.5,0.5 -o art_hsl.png
 ```
 Parameters: `image`, `-o/--output`, `--space` (`hsv` or `hsl`, default `hsv`), `--weights` (weights for hue, saturation, value/lightness).
+Deep dive (theory, weights, images): `docs/scripts/rgb_to_hsv_hsl.md`.
 
 ### rgb_to_xyz.py
 Bridges RGB to XYZ, a prerequisite for Lab or YCbCr conversions.

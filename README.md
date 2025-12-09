@@ -18,6 +18,7 @@ Color accuracy on ARMLite depends on how you measure differences between RGB tri
 - `docs/distance-metrics.md` – perceptual math, CLI switches, and heatmaps.
 - `docs/color-transforms.md` – RGB→Lab/HSV/XYZ/YCbCr helpers and weighting tricks.
 - `docs/pipelines.md`, `docs/cli.md`, `docs/gallery.md` – pipelines, environment setup, and before/after templates.
+- `docs/scripts/rgb_to_hsv_hsl.md` – script-level color theory, usage playbooks, and SVG assets (more single-script docs coming soon).
 
 ---
 

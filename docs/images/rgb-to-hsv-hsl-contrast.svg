@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 220">
+  <title>HSV Value vs HSL Lightness</title>
+  <defs>
+    <linearGradient id="valueGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#000000" />
+      <stop offset="50%" stop-color="#ff3d00" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+    <linearGradient id="lightnessGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#000000" />
+      <stop offset="50%" stop-color="#ffb300" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+  </defs>
+  <rect x="40" y="30" width="420" height="60" fill="url(#valueGradient)" stroke="#222" stroke-width="2" />
+  <rect x="40" y="130" width="420" height="60" fill="url(#lightnessGradient)" stroke="#222" stroke-width="2" />
+  <text x="50" y="20" font-family="monospace" font-size="16" fill="#fafafa">HSV Value (V)</text>
+  <text x="50" y="120" font-family="monospace" font-size="16" fill="#fafafa">HSL Lightness (L)</text>
+  <text x="450" y="55" font-family="monospace" font-size="12" text-anchor="end" fill="#fafafa">0 → 1</text>
+  <text x="450" y="155" font-family="monospace" font-size="12" text-anchor="end" fill="#fafafa">0 → 1</text>
+  <text x="250" y="75" font-family="monospace" font-size="14" text-anchor="middle" fill="#111">Pure hue held constant</text>
+  <text x="250" y="175" font-family="monospace" font-size="14" text-anchor="middle" fill="#111">Balanced lightness mid-point</text>
+</svg>
