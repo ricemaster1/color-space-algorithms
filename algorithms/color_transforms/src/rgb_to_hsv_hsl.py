@@ -101,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('image', help='Path to input image')
     parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
     parser.add_argument('--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
-    parser.add_argument('--weights', default='1,1,1', help='Comma-separated weights for hue,sat,value(lightness) matching (default: 1,1,1)')
+    parser.add_argument('--weights', default='1,1,1', help='Comma-separated weights for hue,sat,value/lightness matching (default: 1,1,1)')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):
