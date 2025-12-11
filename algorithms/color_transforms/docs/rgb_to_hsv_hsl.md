@@ -1,3 +1,8 @@
+---
+title: "`rgb_to_hsv_hsl.py` Deep Dive"
+bibliography: references.bib
+---
+
 # `rgb_to_hsv_hsl.py` 
 # Deep Dive
 
@@ -6,15 +11,81 @@ The `algorithms/color_transforms/src/rgb_to_hsv_hsl.py` module converts arbitrar
 ---
 
 ## Cylindrical color context
-> “HSL and HSV are the two most common cylindrical-coordinate representations of points in an RGB color model. The two representations rearrange the geometry of RGB in an attempt to be more intuitive and perceptually relevant than the cartesian (cube) representation.” — Wikipedia contributors, *HSL and HSV* \[1]
+
+> “HSL and HSV are the two most common cylindrical-coordinate representations of points in an RGB color model. The two representations rearrange the geometry of RGB in an attempt to be more intuitive and perceptually relevant than the cartesian (cube) representation.” — Wikipedia contributors, *HSL and HSV* [@wikipedia-hsl]
 
 That canonical description matches what the ARMLite workflow needs: a hue axis that wraps cleanly, plus independent saturation and lightness/value controls that reflect how artists reason about paint or shader parameters. The well-known twin-cone diagram from the article (licensed CC BY-SA 4.0) illustrates why hue neighborhoods feel continuous in HSV/HSL; recreate a derivative version for this repo by combining our local SVG wheel with saturation/value slices so we can ship an attribution-friendly asset instead of hotlinking the figure.
 
-Beyond Wikipedia, the CSS Color Module Level 4 specification \[2] codifies how modern browsers interpret `hsl()` and `hsv()` syntax, offering concrete parameter ranges to mirror in CLI validation. Pair that guidance with Joblove & Greenberg’s original SIGGRAPH paper and Alvy Ray Smith’s gamut analysis (already cited below) to anchor both intuitive explanations and the underlying math.
+Beyond Wikipedia, the CSS Color Module Level 4 specification [@w3c-color4] codifies how modern browsers interpret `hsl()` and `hsv()` syntax, offering concrete parameter ranges to mirror in CLI validation. Pair that guidance with Joblove & Greenberg’s original SIGGRAPH paper [@joblove1978] and Alvy Ray Smith’s gamut analysis [@smith1978hsv] to anchor both intuitive explanations and the underlying math.
 
-![HSL and HSV double cone models](img/Hsl-hsv_models.svg)
+![HSL and HSV models](img/Hsl-hsv_models.svg)
 
-<small>Figure adapted from Jacob Rus, “HSL and HSV Models,” CC BY-SA 3.0 via Wikimedia Commons.</small>
+<small>Figure adapted from [Jacob Rus, “Hsl-hsv models”](https://commons.wikimedia.org/wiki/File:Hsl-hsv_models.svg), licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) via Wikimedia Commons.</small>
+
+---
+
+## Mathematical backbone
+
+Normalize each pixel’s channels to `[0,1]` so `r = R/255`, `g = G/255`, `b = B/255`. Following the construction laid out by Joblove & Greenberg and later summarized by Smith [@joblove1978; @smith1978hsv], define
+
+$$
+\begin{aligned}
+C_{\max} &= \max(r,g,b), \\
+C_{\min} &= \min(r,g,b), \\
+\Delta &= C_{\max} - C_{\min}.
+\end{aligned}
+$$
+
+### HSV cylinder
+
+$$
+\begin{aligned}
+V &= C_{\max},\\[4pt]
+S &= \begin{cases}
+0 & \text{if } C_{\max} = 0,\\
+\dfrac{\Delta}{C_{\max}} & \text{otherwise},
+\end{cases}\\[10pt]
+H &= \begin{cases}
+0 & \text{if } \Delta = 0,\\
+60^\circ \bmod 360^\circ \times \begin{cases}
+\dfrac{g-b}{\Delta} & C_{\max} = r,\\[6pt]
+2 + \dfrac{b-r}{\Delta} & C_{\max} = g,\\[6pt]
+4 + \dfrac{r-g}{\Delta} & C_{\max} = b.
+\end{cases}
+\end{cases}
+\end{aligned}
+$$
+
+### HSL double cone
+
+$$
+\begin{aligned}
+L &= \frac{C_{\max} + C_{\min}}{2},\\[4pt]
+S &= \begin{cases}
+0 & \text{if } \Delta = 0,\\
+\dfrac{\Delta}{1 - |2L - 1|} & \text{otherwise},
+\end{cases}
+\end{aligned}
+$$
+
+with the hue branch identical to HSV. All trigonometric work inside `colorsys` happens on normalized angles (`H \in [0,1)`), so the script later wraps hue distances in that same domain.
+
+### Weighted palette metric
+
+The closure returned by `_weighted_distance` implements
+
+$$
+\begin{aligned}
+d_H &= \min\left(|h_a - h_b|, 1 - |h_a - h_b|\right),\\
+d_S &= |s_a - s_b|,\\
+d_V &= |v_a - v_b|,\\
+d &= \sqrt{(w_h d_H)^2 + (w_s d_S)^2 + (w_v d_V)^2},
+\end{aligned}
+$$
+
+which mirrors the perceptual heuristics Poynton recommends for highlight-preserving workflows [@poynton2003]. Hue wrap keeps magenta seams from appearing between 359° and 0°, while the user-facing weights translate artistic intent directly into the scoring function.
+
+Once the palette vectors are cached in HSV/HSL space (`_palette_space`), the entire pixel search becomes a geometric problem on cylinders rather than a brute RGB cube walk, and that simple reframing is what lets this script feel like a tool with opinions rather than a generic converter.
 
 ---
 
@@ -27,10 +98,10 @@ Beyond Wikipedia, the CSS Color Module Level 4 specification \[2] codifies how m
 ---
 
 ## Color theory + research backdrop
-- **HSV/HSL origins:** Joblove & Greenberg, *Color Spaces for Computer Graphics* (SIGGRAPH 1978), detail the intuitive hue-saturation-lightness cylinders used here. Their work inspired modern paint-pickers and underpins the formulas exposed by Python's `colorsys`.
-- **Gamut transform math:** Alvy Ray Smith's *Color Gamut Transform Pairs* (1978) proves that hue-first spaces prevent gamut clipping when mapping between RGB primaries. Our transform inherits those guarantees when constraining to the ARMLite palette.
-- **Digital video practice:** Charles Poynton's *Digital Video and HDTV* (Morgan Kaufmann, 2003) recommends HSV-style processing for highlight preservation before quantization. The same advice applies to sprite art where saturated highlights matter.
-- **Perceptual caveats:** Bruce Lindbloom's colorimetry reference (brucelindbloom.com) documents why HSV/HSL are not perceptually uniform; weighting hue and saturation compensates for that non-linearity, which is why the script exposes explicit weights.
+- **HSV/HSL origins:** Joblove & Greenberg’s *Color Spaces for Computer Graphics* (SIGGRAPH 1978) details the intuitive hue-saturation-lightness cylinders used here [@joblove1978]. Their work inspired modern paint-pickers and underpins the formulas exposed by Python's `colorsys`.
+- **Gamut transform math:** Alvy Ray Smith's *Color Gamut Transform Pairs* (1978) proves that hue-first spaces prevent gamut clipping when mapping between RGB primaries [@smith1978hsv]. Our transform inherits those guarantees when constraining to the ARMLite palette.
+- **Digital video practice:** Charles Poynton's *Digital Video and HDTV* (Morgan Kaufmann, 2003) recommends HSV-style processing for highlight preservation before quantization [@poynton2003]. The same advice applies to sprite art where saturated highlights matter.
+- **Perceptual caveats:** Bruce Lindbloom's colorimetry reference documents why HSV/HSL are not perceptually uniform [@lindbloom]; weighting hue and saturation compensates for that non-linearity, which is why the script exposes explicit weights.
 
 ---
 
@@ -96,6 +167,20 @@ Tune weights with fractional steps (e.g., increments of `0.1`). The metric squar
    - `sierra.py --variant sierra-lite` to reduce worm artifacts.
 
 Document pipelines in `docs/pipelines.md` as you validate them so others can reproduce the recipe.
+
+---
+
+## Giving the transform a soul
+
+HSV/HSL math is clinical, but the sprites you feed it are not. When I run `rgb_to_hsv_hsl.py` on a dusk skyline, I start by nudging hue weight past 2 so oranges stay molten, then I sketch a note about what the scene is *supposed* to feel like—“sodium vapor, rain, patient neon.” That note becomes the constraint for every other parameter in the pipeline. Think of the CLI as a color diary: every weight triple is a tiny manifesto about what matters in the frame.
+
+Try this ritual:
+
+1. **Write a sentence** describing the mood before you touch the keyboard.
+2. **Map words to weights** (`vibrant` → high saturation, `somber` → high lightness).
+3. **Commit the combo** in `docs/pipelines.md` with a screenshot so the story travels with the codebase.
+
+These micro-stories keep ARMLite sprites from becoming sterile conversions. They remind contributors that we are not just minimizing distances—we are protecting the emotional gradients artists fought to paint in the first place.
 
 ---
 

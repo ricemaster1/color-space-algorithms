@@ -1,21 +1,103 @@
 from __future__ import annotations
 
-from PIL import Image
 import webcolors
 import argparse
 import os
 import sys
 import json
+import shlex
+import subprocess
+from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Set
 
-from rename_utils import GUI_AVAILABLE as GUI_RENAME_AVAILABLE
-from rename_utils import launch_gui as rename_launch_gui
-from rename_utils import prompt_cli as rename_prompt_cli
-from rename_utils import undo_last as rename_undo_last
-from rename_utils import iter_files as rename_iter_files
+PROJECT_ROOT = Path(__file__).resolve().parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+SCRIPTS_ROOT = PROJECT_ROOT / 'algorithms'
+
+from .rename_utils import GUI_AVAILABLE as GUI_RENAME_AVAILABLE
+from .rename_utils import launch_gui as rename_launch_gui
+from .rename_utils import prompt_cli as rename_prompt_cli
+from .rename_utils import undo_last as rename_undo_last
+from .rename_utils import iter_files as rename_iter_files
+
+
+def _normalize_algo_key(raw: str) -> str:
+    key = raw.strip().lower()
+    if not key:
+        return key
+    key = key.replace('\\', '/').replace('..', '')
+    if key.endswith('.py'):
+        key = key[:-3]
+    key = key.replace('algorithms/', '')
+    while '/src/' in key:
+        key = key.replace('/src/', '/')
+    while '//' in key:
+        key = key.replace('//', '/')
+    return key.strip('/ ')
+
+
+@dataclass(frozen=True)
+class ExternalAlgorithm:
+    slug: str
+    category: str
+    name: str
+    path: Path
+    aliases: tuple[str, ...]
+
+
+def _discover_external_algorithms(root: Path, reserved: set[str]) -> tuple[list[ExternalAlgorithm], dict[str, ExternalAlgorithm]]:
+    entries: list[ExternalAlgorithm] = []
+    alias_map: dict[str, ExternalAlgorithm] = {}
+    if not root.is_dir():
+        return entries, alias_map
+
+    pending: list[tuple[str, str, Path]] = []
+    for category_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        src_dir = category_dir / 'src'
+        if not src_dir.is_dir():
+            continue
+        for script_path in sorted(src_dir.glob('*.py')):
+            name = script_path.stem
+            slug = _normalize_algo_key(f"{category_dir.name}/{name}")
+            pending.append((category_dir.name, name, script_path))
+
+    name_counts = Counter(name.lower() for _, name, _ in pending)
+
+    for category, name, script_path in pending:
+        slug = _normalize_algo_key(f"{category}/{name}")
+        alias_candidates = {slug, slug.replace('/', '.')}
+        if name_counts[name.lower()] == 1 and name.lower() not in reserved:
+            alias_candidates.add(name.lower())
+        aliases = tuple(sorted(alias_candidates))
+        meta = ExternalAlgorithm(slug=slug, category=category, name=name, path=script_path.resolve(), aliases=aliases)
+        entries.append(meta)
+        for alias in aliases:
+            alias_map[alias] = meta
+    return entries, alias_map
+
+
+EXTERNAL_ALGORITHMS, EXTERNAL_ALGO_ALIASES = _discover_external_algorithms(SCRIPTS_ROOT, set())
+
+
+def list_available_algorithms() -> None:
+    if not EXTERNAL_ALGORITHMS:
+        print(f"No external algorithms found under {SCRIPTS_ROOT}.")
+        print('Add scripts in <category>/src/*.py to make them discoverable.')
+        return
+    print('Available algorithms (use -a <alias>):')
+    grouped: dict[str, list[ExternalAlgorithm]] = {}
+    for meta in EXTERNAL_ALGORITHMS:
+        grouped.setdefault(meta.category, []).append(meta)
+    for category in sorted(grouped.keys()):
+        print(f"[{category}]")
+        for meta in grouped[category]:
+            alias_str = ', '.join(meta.aliases)
+            print(f"  - {meta.slug} ({alias_str})")
 
 try:
     import curses
@@ -69,8 +151,6 @@ ANSI_DIM = '\033[2m'
 
 # Sentinel used to detect whether optional CLI parameters were explicitly provided
 ARG_UNSET = object()
-
-
 class SingleValueAction(argparse.Action):
     """Prevent options that should appear only once from being repeated."""
 
@@ -97,151 +177,14 @@ def closest_color(rgb):
             best = name
     return best
 
-def apply_ordered_dither(img):
-    bayer2x2 = [[0, 2], [3, 1]]
-    pixels = img.load()
-    w, h = img.size
-    for y in range(h):
-        for x in range(w):
-            r, g, b = pixels[x, y]
-            t = bayer2x2[y % 2][x % 2]
-            r = min(255, max(0, r + (t - 1) * 8))
-            g = min(255, max(0, g + (t - 1) * 8))
-            b = min(255, max(0, b + (t - 1) * 8))
-            pixels[x, y] = (r, g, b)
-    return img
 
-def apply_floyd_steinberg(img):
-    pixels = img.load()
-    w, h = img.size
-    for y in range(h):
-        for x in range(w):
-            oldp = pixels[x, y]
-            cname = closest_color(oldp)
-            newp = ARMLITE_RGB[cname]
-            pixels[x, y] = newp
-            err = (oldp[0]-newp[0], oldp[1]-newp[1], oldp[2]-newp[2])
-            def add(ix, iy, f):
-                if 0 <= ix < w and 0 <= iy < h:
-                    r, g, b = pixels[ix, iy]
-                    pixels[ix, iy] = (
-                        min(255, max(0, int(r + err[0]*f))),
-                        min(255, max(0, int(g + err[1]*f))),
-                        min(255, max(0, int(b + err[2]*f))),
-                    )
-            add(x+1, y, 7/16)
-            add(x-1, y+1, 3/16)
-            add(x,   y+1, 5/16)
-            add(x+1, y+1, 1/16)
-    return img
 
-def context_quantize(img, n=3):
-    pixels = img.load()
-    w, h = img.size
-    def top_n(rgb):
-        d = [(color_distance(rgb, c), name) for name, c in ARMLITE_RGB.items()]
-        d.sort(key=lambda x: x[0])
-        return [name for _, name in d[:n]]
-    for y in range(h):
-        for x in range(w):
-            rgb = pixels[x, y]
-            cands = top_n(rgb)
-            if len(cands) == 1:
-                pixels[x, y] = ARMLITE_RGB[cands[0]]
-                continue
-            # 4-neighborhood smoothness
-            neigh = []
-            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                nx, ny = x+dx, y+dy
-                if 0 <= nx < w and 0 <= ny < h:
-                    neigh.append(pixels[nx, ny])
-            best_name = cands[0]
-            best_score = 10**12
-            for name in cands:
-                crgb = ARMLITE_RGB[name]
-                score = sum(color_distance(crgb, nrgb) for nrgb in neigh)
-                if score < best_score:
-                    best_score = score
-                    best_name = name
-            pixels[x, y] = ARMLITE_RGB[best_name]
-    # Return final color-name grid
-    return [[closest_color(pixels[x, y]) for x in range(w)] for y in range(h)]
-
-def node_quantize(img, n=3, iterations=3):
-    w, h = img.size
-    src = list(img.getdata())
-    # Precompute top-N per pixel
-    def top_n(rgb):
-        d = sorted(ARMLITE_RGB.items(), key=lambda it: color_distance(rgb, it[1]))
-        return [name for name, _ in d[:n]]
-    grid = [[top_n(src[y*w + x]) for x in range(w)] for y in range(h)]
-    best = [[cands[0] for cands in row] for row in grid]
-    for _ in range(iterations):
-        for y in range(h):
-            for x in range(w):
-                rgb0 = src[y*w + x]
-                best_energy = 10**12
-                best_name = best[y][x]
-                for name in grid[y][x]:
-                    crgb = ARMLITE_RGB[name]
-                    e = color_distance(crgb, rgb0)
-                    for dx in (-1,0,1):
-                        for dy in (-1,0,1):
-                            if dx == 0 and dy == 0:
-                                continue
-                            nx, ny = x+dx, y+dy
-                            if 0 <= nx < w and 0 <= ny < h:
-                                nrgb = ARMLITE_RGB[best[ny][nx]]
-                                e += 0.5 * color_distance(crgb, nrgb)
-                    if e < best_energy:
-                        best_energy = e
-                        best_name = name
-                best[y][x] = best_name
-    return best
-
-def generate_assembly(color_grid, output_path):
-    h = len(color_grid)
-    w = len(color_grid[0]) if h else 0
-    lines = [
-        '; === Fullscreen Sprite ===',
-        '    MOV R0, #2',
-        '    STR R0, .Resolution',
-        '    MOV R1, #.PixelScreen',
-        '    MOV R6, #512 ; row stride (128 * 4)'
-    ]
-    for y in range(h):
-        for x in range(w):
-            offset = ((y * w) + x) * 4
-            lines.append(f'    MOV R5, #{offset}')
-            lines.append('    ADD R4, R1, R5')
-            cname = color_grid[y][x]
-            lines.append(f'    MOV R0, #.{cname}')
-            lines.append(f'    STR R0, [R4]   ; Pixel ({x},{y})')
-    lines.append('    HALT')
-    with open(output_path, 'w') as f:
-        f.write('\n'.join(lines))
-    print(f"Assembly sprite file written to {output_path}")
-
-def build_preview(color_grid, path):
-    if not path:
-        return
-    h = len(color_grid)
-    w = len(color_grid[0]) if h else 0
-    img = Image.new('RGB', (w, h))
-    px = img.load()
-    for y in range(h):
-        for x in range(w):
-            px[x, y] = ARMLITE_RGB[color_grid[y][x]]
-    img.save(path)
-    print(f"Preview image saved to {path}")
-
-ALGOS = {
-    'nearest': 'Map each pixel to the closest ARMLite color (no dithering).',
-    'ordered': 'Apply 2x2 ordered dithering, then map to closest color.',
-    'floyd':   'Floyd-Steinberg error-diffusion dithering.',
-    'context': 'Top-N neighbor-aware smoothing (no global iterations).',
-    'node':    'Iterative node-based optimization with top-N candidates.'
-}
+def run_external_algorithm(meta: ExternalAlgorithm, image_path: Path, output_path: Path, extra_args: str) -> None:
+    cmd = [sys.executable, str(meta.path), str(image_path)]
+    if extra_args:
+        cmd.extend(shlex.split(extra_args))
+    cmd.extend(['-o', str(output_path)])
+    subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
 
 def load_mapping(map_file: Path) -> dict:
     if map_file.exists():
@@ -505,9 +448,7 @@ def format_output_name(rename_mode: str, pattern: str, base_name: str, index: in
 
 def run_convert(args) -> None:
     if args.algo.lower() in ('help', 'list', '?'):
-        print('Available algorithms:')
-        for key, desc in ALGOS.items():
-            print(f'  - {key}: {desc}')
+        list_available_algorithms()
         return
 
     pattern_provided = args.pattern is not ARG_UNSET
@@ -617,7 +558,16 @@ def run_convert(args) -> None:
         if active_keys is not None and not active_keys:
             print('Mapping disabled for this run; outputs will go to the base directory.')
 
-    algo = args.algo.lower()
+    algo_key = _normalize_algo_key(args.algo)
+    external_algo = EXTERNAL_ALGO_ALIASES.get(algo_key)
+    if external_algo is None:
+        print(f"Unknown algorithm '{args.algo}'. Use '-a help' to list available options.")
+        list_available_algorithms()
+        raise SystemExit(2)
+    algo_label_for_names = external_algo.slug
+    extra_algo_args = args.algo_extra or ''
+    preview_warning_shown = False
+
     base_out.mkdir(parents=True, exist_ok=True)
     if preview_dir is not None:
         preview_dir.mkdir(parents=True, exist_ok=True)
@@ -710,7 +660,7 @@ def run_convert(args) -> None:
                 preview_target = preview_dir
 
         target_dir.mkdir(parents=True, exist_ok=True)
-        out_name = format_output_name(args.rename_mode, pattern_template, name, idx, algo, args.n)
+        out_name = format_output_name(args.rename_mode, pattern_template, name, idx, algo_label_for_names, args.n)
         asm_path = target_dir / f"{out_name}.s"
         prev_path = None
         if preview_target is not None:
@@ -718,32 +668,21 @@ def run_convert(args) -> None:
             prev_path = preview_target / f"{out_name}.png"
 
         if args.dry_run:
-            print(f"[DRY] {img_path} -> {asm_path}{' | preview: ' + str(prev_path) if prev_path else ''}")
+            preview_note = ''
+            if prev_path is not None:
+                preview_note = ' | preview (skipped for script algorithms)'
+            print(f"[DRY] {img_path} -> {asm_path}{preview_note} [script: {external_algo.slug}]")
             render_progress(idx)
             continue
 
-        img = Image.open(str(img_path)).convert('RGB').resize((128, 96))
-
-        if algo == 'nearest':
-            grid = [[closest_color(img.getpixel((x, y))) for x in range(128)] for y in range(96)]
-        elif algo == 'ordered':
-            img = apply_ordered_dither(img)
-            grid = [[closest_color(img.getpixel((x, y))) for x in range(128)] for y in range(96)]
-        elif algo == 'floyd':
-            img = apply_floyd_steinberg(img)
-            grid = [[closest_color(img.getpixel((x, y))) for x in range(128)] for y in range(96)]
-        elif algo == 'context':
-            grid = context_quantize(img, n=max(1, args.n))
-        elif algo == 'node':
-            grid = node_quantize(img, n=max(1, args.n))
-        else:
-            print(f"Unknown algorithm '{args.algo}'. Use -a help to list options.")
-            raise SystemExit(2)
-
-        if prev_path is not None:
-            build_preview(grid, str(prev_path))
-
-        generate_assembly(grid, str(asm_path))
+        if prev_path is not None and not preview_warning_shown:
+            print('Preview generation is skipped for external algorithms; rely on the script output instead.')
+            preview_warning_shown = True
+        try:
+            run_external_algorithm(external_algo, img_path, asm_path, extra_algo_args)
+        except subprocess.CalledProcessError as exc:
+            print(f"External algorithm '{external_algo.slug}' failed with exit code {exc.returncode}.")
+            raise
         render_progress(idx)
 
     if show_progress:
@@ -817,7 +756,8 @@ def build_parser() -> argparse.ArgumentParser:
     convert.set_defaults(func=run_convert)
     convert.add_argument('input', nargs='?', default='images', help='Path to input image or directory (default: images)')
     convert.add_argument('-O', '--output-dir', default='output', help='Directory to write .s files (default: output)')
-    convert.add_argument('-a', '--algo', default='nearest', help="Algorithm: nearest|ordered|floyd|context|node or 'help' to list")
+    convert.add_argument('-a', '--algo', default='nearest', help="Algorithm slug or alias (use 'help' to list discovered scripts)")
+    convert.add_argument('--algo-extra', default='', help='Extra CLI arguments passed through when using external script algorithms')
     convert.add_argument('-n', type=int, default=3, help='Top-N for context/node algorithms (default: 3)')
     convert.add_argument('--preview', nargs='?', const='preview', help='Save preview PNGs. If value is a directory, files go there; with no value, uses ./preview')
     convert.add_argument('--rename-mode', choices=['default', 'prompt', 'pattern'], default='default', help='Control output filenames (default: base name)')
