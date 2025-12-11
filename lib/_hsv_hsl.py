@@ -128,53 +128,39 @@ def plot_hsv_disk(ax, z: float, value_level: float, cfg: RenderConfig) -> None:
     ax.plot_surface(x, y, z_grid, facecolors=colors, linewidth=0, antialiased=False, shade=False)
 
 
-def plot_hsv_slice_plane(ax, cfg: RenderConfig) -> None:
-    """Draw the inner slice walls as rectangular cross-sections.
-    
-    Each wall spans from center (radius=0) to edge (radius=1) horizontally,
-    and from bottom (value=0) to top (value=1) vertically.
-    The hue matches the angle of that wall; saturation = radius; value = height.
-    """
-    # Build a grid where:
-    #   - columns (axis 1) = radius/saturation from 0 to 1
-    #   - rows (axis 0) = height/value from 0 to 1
-    n = cfg.hsv_value_steps
+def _draw_hsv_wall(ax, angle: float, hue: float, n: int) -> None:
+    """Draw a single HSV slice wall at the given angle with the given hue."""
     sat = np.linspace(0.0, 1.0, n)
     value = np.linspace(0.0, 1.0, n)
-    # sat_grid[i, j] = sat[j], value_grid[i, j] = value[i]
     sat_grid, value_grid = np.meshgrid(sat, value)
+    
+    hsv = np.stack([
+        np.full_like(sat_grid, hue),
+        sat_grid,
+        value_grid,
+    ], axis=-1)
+    colors = hsv_to_rgb(hsv)
+    
+    x = sat_grid * np.cos(angle)
+    y = sat_grid * np.sin(angle)
+    z = value_grid
+    
+    ax.plot_surface(
+        x, y, z,
+        facecolors=colors,
+        linewidth=0,
+        antialiased=False,
+        shade=False,
+    )
 
+
+def plot_hsv_slice_plane(ax, cfg: RenderConfig) -> None:
+    """Draw the inner slice walls as rectangular cross-sections."""
+    n = cfg.hsv_value_steps
+    
     for angle in slice_boundary_angles(cfg):
-        # Compute the hue for this wall face from the angle
         hue = cfg.slice_hue_override if cfg.slice_hue_override is not None else hue_from_angle(angle)
-        
-        # HSV color:
-        #   H = constant (the hue at this wall's angle)
-        #   S = sat_grid (0 at center = white, 1 at edge = full color)
-        #   V = value_grid (0 at bottom = dark, 1 at top = bright)
-        hsv = np.stack([
-            np.full_like(sat_grid, hue),
-            sat_grid,    # saturation = distance from center
-            value_grid,  # value = height (dark at bottom, bright at top)
-        ], axis=-1)
-        colors = hsv_to_rgb(hsv)
-
-        # Position the wall at the correct angle
-        # x, y = radius * cos/sin(angle), z = height
-        x = sat_grid * np.cos(angle)
-        y = sat_grid * np.sin(angle)
-        z = value_grid
-
-        ax.plot_surface(
-            x,
-            y,
-            z,
-            facecolors=colors,
-            linewidth=0,
-            antialiased=False,
-            shade=False,
-            zorder=10,  # ensure walls render on top
-        )
+        _draw_hsv_wall(ax, angle, hue, n)
 
 
 def plot_hsl_double_cone(ax, cfg: RenderConfig) -> None:
@@ -201,37 +187,41 @@ def plot_hsl_double_cone(ax, cfg: RenderConfig) -> None:
     ax.set_title("HSL double-cone", pad=10)
 
 
-def plot_hsl_slice_plane(ax, cfg: RenderConfig) -> None:
-    lightness = np.linspace(0.0, 1.0, cfg.hsl_lightness_steps)
-    sat = np.linspace(0.0, 1.0, cfg.hsl_lightness_steps)
+def _draw_hsl_wall(ax, angle: float, hue: float, n: int) -> None:
+    """Draw a single HSL slice wall at the given angle with the given hue."""
+    lightness = np.linspace(0.0, 1.0, n)
+    sat = np.linspace(0.0, 1.0, n)
     sat_grid, lightness_grid = np.meshgrid(sat, lightness)
-
+    
     radius_max = 1.0 - np.abs(2.0 * lightness_grid - 1.0)
     radius = sat_grid * radius_max
+    
+    colors = hls_to_rgb_array(
+        np.full_like(lightness_grid, hue),
+        lightness_grid,
+        sat_grid,
+    )
+    
+    x = radius * np.cos(angle)
+    y = radius * np.sin(angle)
+    z = lightness_grid
+    
+    ax.plot_surface(
+        x, y, z,
+        facecolors=colors,
+        linewidth=0,
+        antialiased=False,
+        shade=False,
+    )
 
+
+def plot_hsl_slice_plane(ax, cfg: RenderConfig) -> None:
+    """Draw the inner slice walls for the HSL double-cone."""
+    n = cfg.hsl_lightness_steps
+    
     for angle in slice_boundary_angles(cfg):
-        # Compute the hue for this wall face from the angle
         hue = cfg.slice_hue_override if cfg.slice_hue_override is not None else hue_from_angle(angle)
-        
-        colors = hls_to_rgb_array(
-            np.full_like(lightness_grid, hue),
-            lightness_grid,
-            sat_grid,
-        )
-
-        x = radius * np.cos(angle)
-        y = radius * np.sin(angle)
-        z = lightness_grid
-
-        ax.plot_surface(
-            x,
-            y,
-            z,
-            facecolors=colors,
-            linewidth=0,
-            antialiased=False,
-            shade=False,
-        )
+        _draw_hsl_wall(ax, angle, hue, n)
 
 
 def configure_axes(ax) -> None:
