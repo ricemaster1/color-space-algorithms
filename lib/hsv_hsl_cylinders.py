@@ -95,36 +95,11 @@ def _plot_hsl_double_cone(ax):
         antialiased=False,
         shade=False,
     )
-    _plot_hsl_disk(ax, z=0.0, lightness_level=0.0)
-    _plot_hsl_disk(ax, z=1.0, lightness_level=1.0)
+    ax.scatter([0], [0], [0], color='black', s=60, depthshade=False)
+    ax.scatter([0], [0], [1], color='white', edgecolors='black', s=60, depthshade=False)
     ax.set_title('HSL Double Cone', pad=16)
     ax.set_box_aspect((1, 1, 1))
     ax.set_axis_off()
-
-
-def _plot_hsl_disk(ax, z: float, lightness_level: float):
-    radius = np.linspace(0.0, 1.0, 120)
-    theta = np.linspace(0, 2 * np.pi, 360)
-    radius_grid, theta_grid = np.meshgrid(radius, theta)
-
-    x = radius_grid * np.cos(theta_grid)
-    y = radius_grid * np.sin(theta_grid)
-    z_grid = np.full_like(x, z)
-
-    hue_norm = (theta_grid / (2 * np.pi)) % 1.0
-    sat = radius_grid
-    light = np.full_like(radius_grid, lightness_level)
-    colors = _hls_to_rgb_array(hue_norm, light, sat)
-
-    ax.plot_surface(
-        x,
-        y,
-        z_grid,
-        facecolors=colors,
-        linewidth=0,
-        antialiased=False,
-        shade=False,
-    )
 
 
 def main():
