@@ -33,7 +33,8 @@ class RenderConfig:
     hsl_theta_steps: int = 360
     hsl_lightness_steps: int = 200
     slice_center_angle: float = 0.0
-    slice_width: float = np.deg2rad(130.0)
+    slice_width: float = np.deg2rad(65.0)  # HSV slice width
+    hsl_slice_width: float = np.deg2rad(45.0)  # HSL slice width (smaller to show more color)
     slice_hue_override: Optional[float] = None  # set to 5/6 for magenta, etc.
     hsv_slice_value_span: float = 1.0  # 1.0 = full-height wall gradient; shrink to compress
     draw_hsv_top_cap: bool = True
@@ -42,6 +43,9 @@ class RenderConfig:
 
     def slice_half_width(self) -> float:
         return max(self.slice_width / 2.0, 0.0)
+    
+    def hsl_slice_half_width(self) -> float:
+        return max(self.hsl_slice_width / 2.0, 0.0)
 
 
 def hue_from_angle(angle: float) -> float:
@@ -67,6 +71,11 @@ def hls_to_rgb_array(h: np.ndarray, l: np.ndarray, s: np.ndarray) -> np.ndarray:
 
 def slice_boundary_angles(cfg: RenderConfig) -> Tuple[float, float]:
     hw = cfg.slice_half_width()
+    return cfg.slice_center_angle - hw, cfg.slice_center_angle + hw
+
+
+def hsl_slice_boundary_angles(cfg: RenderConfig) -> Tuple[float, float]:
+    hw = cfg.hsl_slice_half_width()
     return cfg.slice_center_angle - hw, cfg.slice_center_angle + hw
 
 
@@ -135,41 +144,57 @@ def plot_hsv_cylinder(ax, cfg: RenderConfig) -> None:
     _add_hsv_wall_polys(all_verts, all_colors, left_angle, cfg)
     _add_hsv_wall_polys(all_verts, all_colors, right_angle, cfg)
     
+    # Add cap polygons
+    if cfg.draw_hsv_bottom_cap:
+        _add_hsv_disk_polys(all_verts, all_colors, z=0.0, value_level=0.0, cfg=cfg)
+    if cfg.draw_hsv_top_cap:
+        _add_hsv_disk_polys(all_verts, all_colors, z=1.0, value_level=1.0, cfg=cfg)
+    
     # Sort by camera depth and render
     cam_dir = _camera_direction()
     sorted_verts, sorted_colors = _sort_polys_by_depth(all_verts, all_colors, cam_dir)
     
     poly = Poly3DCollection(sorted_verts, facecolors=sorted_colors, edgecolors='none')
     ax.add_collection3d(poly)
+    
+    # Add annotations
+    _add_hue_labels(ax, radius=1.2, z=0.5)
+    _add_vertical_arrow(ax, x=-0.2, y=-1.3, z0=0.0, z1=1.0, label="Value", color='white')
+    _add_saturation_arrow(ax, angle=np.radians(200), z=1.05, r0=0.0, r1=1.0, color='white')
 
-    # Optional caps (drawn separately - they don't have z-ordering issues)
-    if cfg.draw_hsv_bottom_cap:
-        plot_hsv_disk(ax, z=0.0, value_level=0.0, cfg=cfg)
-    if cfg.draw_hsv_top_cap:
-        plot_hsv_disk(ax, z=1.0, value_level=1.0, cfg=cfg)
-
-    ax.set_title("HSV cylinder", pad=10)
+    ax.set_title("HSV cylinder", pad=10, color='white')
 
 
-def plot_hsv_disk(ax, z: float, value_level: float, cfg: RenderConfig) -> None:
-    radius = np.linspace(0.0, 1.0, cfg.hsv_value_steps)
-    theta = np.linspace(0.0, 2 * np.pi, cfg.hsv_theta_steps)
-    radius_grid, theta_grid = np.meshgrid(radius, theta)
-
-    x = radius_grid * np.cos(theta_grid)
-    y = radius_grid * np.sin(theta_grid)
-    z_grid = np.full_like(x, z)
-
-    hues = (theta_grid / (2 * np.pi)) % 1.0
-    hsv = np.stack([hues, radius_grid, np.full_like(radius_grid, value_level)], axis=-1)
-    colors = hsv_to_rgb(hsv)
-
-    mask = slice_mask(theta_grid, cfg.slice_center_angle, cfg.slice_half_width())
-    x = np.where(mask, x, np.nan)
-    y = np.where(mask, y, np.nan)
-    z_grid = np.where(mask, z_grid, np.nan)
-
-    ax.plot_surface(x, y, z_grid, facecolors=colors, linewidth=0, antialiased=False, shade=False)
+def _add_hsv_disk_polys(all_verts: list, all_colors: list, z: float, value_level: float, cfg: RenderConfig) -> None:
+    """Add HSV disk cap polygons to the collection for unified z-sorting."""
+    left_angle, right_angle = slice_boundary_angles(cfg)
+    theta_start = right_angle
+    theta_end = left_angle + 2 * np.pi
+    
+    n_theta = cfg.hsv_theta_steps // 4  # Reduce resolution for caps
+    n_radius = cfg.hsv_value_steps // 4
+    theta = np.linspace(theta_start, theta_end, n_theta)
+    radius = np.linspace(0.0, 1.0, n_radius)
+    
+    for i in range(n_radius - 1):
+        for j in range(n_theta - 1):
+            r0, r1 = radius[i], radius[i + 1]
+            t0, t1 = theta[j], theta[j + 1]
+            
+            quad = [
+                (r0 * np.cos(t0), r0 * np.sin(t0), z),
+                (r1 * np.cos(t0), r1 * np.sin(t0), z),
+                (r1 * np.cos(t1), r1 * np.sin(t1), z),
+                (r0 * np.cos(t1), r0 * np.sin(t1), z),
+            ]
+            all_verts.append(quad)
+            
+            t_mid = (t0 + t1) / 2
+            r_mid = (r0 + r1) / 2
+            h = hue_from_angle(t_mid)
+            hsv = np.array([[[h, r_mid, value_level]]])
+            rgb = hsv_to_rgb(hsv)[0, 0]
+            all_colors.append(rgb)
 
 
 def _add_hsv_wall_polys(all_verts: list, all_colors: list, angle: float, cfg: RenderConfig) -> None:
@@ -208,7 +233,7 @@ def plot_hsl_double_cone(ax, cfg: RenderConfig) -> None:
     all_colors = []
     
     # Build double-cone polygons (excluding sliced section)
-    left_angle, right_angle = slice_boundary_angles(cfg)
+    left_angle, right_angle = hsl_slice_boundary_angles(cfg)
     theta_start = right_angle
     theta_end = left_angle + 2 * np.pi
     
@@ -251,8 +276,13 @@ def plot_hsl_double_cone(ax, cfg: RenderConfig) -> None:
     
     poly = Poly3DCollection(sorted_verts, facecolors=sorted_colors, edgecolors='none')
     ax.add_collection3d(poly)
+    
+    # Add annotations
+    _add_hue_labels(ax, radius=1.2, z=0.5)
+    _add_vertical_arrow(ax, x=-0.2, y=-1.3, z0=0.0, z1=1.0, label="Lightness", color='white')
+    _add_saturation_arrow(ax, angle=np.radians(200), z=0.5, r0=0.0, r1=1.0, color='white')
 
-    ax.set_title("HSL double-cone", pad=10)
+    ax.set_title("HSL double-cone", pad=10, color='white')
 
 
 def _add_hsl_wall_polys(all_verts: list, all_colors: list, angle: float, cfg: RenderConfig) -> None:
@@ -291,26 +321,97 @@ def _add_hsl_wall_polys(all_verts: list, all_colors: list, angle: float, cfg: Re
             all_colors.append(rgb)
 
 
-def configure_axes(ax) -> None:
+def configure_axes(ax, zoom: float = 1.0) -> None:
     ax.set_box_aspect((1, 1, 1))
     ax.set_axis_off()
     ax.view_init(elev=25, azim=35)
+    # Zoom in by adjusting limits
+    lim = 1.0 / zoom
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    ax.set_zlim(-0.1 / zoom, (1.0 + 0.1) / zoom)
+
+
+def _add_hue_labels(ax, radius: float = 1.15, z: float = 0.5) -> None:
+    """Add hue color labels around the shape (0°/Red, 120°/Green, 240°/Blue)."""
+    labels = [
+        (0, "0° Red", "red"),
+        (120, "120° Green", "green"),
+        (240, "240° Blue", "blue"),
+    ]
+    for deg, text, color in labels:
+        rad = np.radians(deg)
+        x, y = radius * np.cos(rad), radius * np.sin(rad)
+        ax.text(x, y, z, text, color=color, fontsize=8, ha='center', va='center',
+                fontweight='bold')
+
+
+def _add_vertical_arrow(ax, x: float, y: float, z0: float, z1: float, label: str, color: str = 'white') -> None:
+    """Add a vertical arrow with label for Value/Lightness scale."""
+    from mpl_toolkits.mplot3d.art3d import Line3D
+    # Draw arrow line
+    ax.plot([x, x], [y, y], [z0, z1], color=color, linewidth=2)
+    # Arrow head
+    ax.plot([x, x], [y, y], [z1 - 0.05, z1], color=color, linewidth=3)
+    # Labels at ends
+    ax.text(x, y, z0 - 0.08, "0", color=color, fontsize=9, ha='center', va='top')
+    ax.text(x, y, z1 + 0.08, "1", color=color, fontsize=9, ha='center', va='bottom')
+    # Arrow label
+    ax.text(x - 0.15, y, (z0 + z1) / 2, label, color=color, fontsize=10, ha='right', va='center',
+            rotation=90)
+
+
+def _add_saturation_arrow(ax, angle: float, z: float, r0: float, r1: float, color: str = 'white') -> None:
+    """Add a radial arrow with label for Saturation scale."""
+    x0, y0 = r0 * np.cos(angle), r0 * np.sin(angle)
+    x1, y1 = r1 * np.cos(angle), r1 * np.sin(angle)
+    # Draw arrow line
+    ax.plot([x0, x1], [y0, y1], [z, z], color=color, linewidth=2)
+    # Labels
+    ax.text(x0, y0, z, "0", color=color, fontsize=9, ha='center', va='center')
+    ax.text(x1 * 1.1, y1 * 1.1, z, "1", color=color, fontsize=9, ha='center', va='center')
+    # Label in middle
+    xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+    ax.text(xm, ym, z + 0.12, "Saturation", color=color, fontsize=9, ha='center', va='bottom')
 
 
 def main() -> None:
     cfg = RenderConfig()
-    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    fig = plt.figure(figsize=(16, 8))
+    
+    # Create dark gray radial gradient background
+    ax_bg = fig.add_axes([0, 0, 1, 1])
+    ax_bg.set_xlim(0, 1)
+    ax_bg.set_ylim(0, 1)
+    ax_bg.set_aspect('auto')
+    
+    # Radial gradient: lighter center, darker edges
+    x = np.linspace(0, 1, 200)
+    y = np.linspace(0, 1, 200)
+    X, Y = np.meshgrid(x, y)
+    # Distance from center, normalized
+    R = np.sqrt((X - 0.5)**2 + (Y - 0.5)**2) / 0.7
+    R = np.clip(R, 0, 1)
+    # Gradient from light gray (center) to dark gray (edges)
+    gradient = 0.35 - 0.15 * R  # 0.35 at center, 0.20 at edges
+    rgb_bg = np.stack([gradient, gradient, gradient], axis=-1)
+    ax_bg.imshow(rgb_bg, extent=[0, 1, 0, 1], origin='lower', aspect='auto')
+    ax_bg.axis('off')
 
     ax_hsv = fig.add_subplot(1, 2, 1, projection="3d")
+    ax_hsv.set_facecolor((0, 0, 0, 0))  # Transparent to show gradient
+    ax_hsv.patch.set_alpha(0)
     plot_hsv_cylinder(ax_hsv, cfg)
-    configure_axes(ax_hsv)
+    configure_axes(ax_hsv, zoom=1.2)
 
     ax_hsl = fig.add_subplot(1, 2, 2, projection="3d")
+    ax_hsl.set_facecolor((0, 0, 0, 0))  # Transparent to show gradient
+    ax_hsl.patch.set_alpha(0)
     plot_hsl_double_cone(ax_hsl, cfg)
-    configure_axes(ax_hsl)
+    configure_axes(ax_hsl, zoom=1.2)
 
-    fig.suptitle("HSV vs HSL scaffold", fontsize=16)
-    fig.savefig(cfg.output_path, transparent=True)
+    fig.suptitle("HSV vs HSL scaffold", fontsize=18, color='white', y=0.95)
+    fig.savefig(cfg.output_path, facecolor=fig.get_facecolor(), edgecolor='none', dpi=150)
     print(f"Saved figure to {cfg.output_path.resolve()}")
 
 
