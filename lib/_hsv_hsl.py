@@ -145,6 +145,9 @@ def _draw_hsv_wall(ax, angle: float, hue: float, n: int) -> None:
     y = sat_grid * np.sin(angle)
     z = value_grid
     
+    # Make a copy of the colors array to ensure it's not shared
+    colors = colors.copy()
+    
     ax.plot_surface(
         x, y, z,
         facecolors=colors,
