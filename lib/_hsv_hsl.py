@@ -1,232 +1,261 @@
+"""HSV/HSL geometry scaffold using Matplotlib.
+
+This module rebuilds the HSV cylinder and HSL double-cone with clean slice
+controls so we can iterate inside Matplotlib before exporting meshes to Blender.
+
+References
+---------
+- Linus Östholm, *blender-plots*, https://github.com/Linusnie/blender-plots
+- Vignolini Lab, *PyLlama*, https://github.com/VignoliniLab/PyLlama
+- Jake VanderPlas, *Python Data Science Handbook*,
+  https://jakevdp.github.io/PythonDataScienceHandbook/04.12-three-dimensional-plotting.html
+"""
+
 from __future__ import annotations
 
 import colorsys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import hsv_to_rgb
 
 
-SLICE_OPENING_ANGLE = np.deg2rad(80)  # angular width removed to reveal a slice
-SLICE_FACE_ANGLE = -0.5  # angle of the visible inner wall (what we stand in front of)
-SLICE_MAX_ANGLE = SLICE_FACE_ANGLE + SLICE_OPENING_ANGLE
-SLICE_FACE_HUE = ((SLICE_FACE_ANGLE % (2 * np.pi)) / (2 * np.pi)) % 1.0
+@dataclass(slots=True)
+class RenderConfig:
+    """Configuration bundle for the HSV/HSL figure."""
+
+    hsv_theta_steps: int = 360
+    hsv_value_steps: int = 160
+    hsl_theta_steps: int = 360
+    hsl_lightness_steps: int = 200
+    slice_center_angle: float = 0.0
+    slice_width: float = np.deg2rad(130.0)
+    slice_hue_override: Optional[float] = None  # set to 5/6 for magenta, etc.
+    hsv_slice_value_span: float = 1.0  # 1.0 = full-height wall gradient; shrink to compress
+    draw_hsv_top_cap: bool = True
+    draw_hsv_bottom_cap: bool = True
+    output_path: Path = Path("hsv_hsl_.svg")
+
+    def slice_half_width(self) -> float:
+        return max(self.slice_width / 2.0, 0.0)
 
 
-def _hls_to_rgb_array(h: np.ndarray, l: np.ndarray, s: np.ndarray) -> np.ndarray:
-    hls_to_rgb = np.vectorize(colorsys.hls_to_rgb, otypes=[float, float, float])
-    r, g, b = hls_to_rgb(h, l, s)
+def hue_from_angle(angle: float) -> float:
+    """Map an angle in radians to a hue fraction in [0, 1)."""
+
+    return ((angle % (2 * np.pi)) / (2 * np.pi)) % 1.0
+
+
+def slice_mask(theta_grid: np.ndarray, center_angle: float, half_width: float) -> np.ndarray:
+    """Boolean mask that keeps cells outside the slice window."""
+
+    wrapped = (theta_grid - center_angle + np.pi) % (2 * np.pi) - np.pi
+    return np.abs(wrapped) > half_width
+
+
+def hls_to_rgb_array(h: np.ndarray, l: np.ndarray, s: np.ndarray) -> np.ndarray:
+    """Vectorized wrapper over colorsys.hls_to_rgb."""
+
+    vectorized = np.vectorize(colorsys.hls_to_rgb, otypes=[float, float, float])
+    r, g, b = vectorized(h, l, s)
     return np.stack([r, g, b], axis=-1)
 
 
-def _slice_mask(theta_values: np.ndarray) -> np.ndarray:
-    wrapped = (theta_values - SLICE_FACE_ANGLE) % (2 * np.pi)
-    return (wrapped >= 0.0) & (wrapped <= SLICE_OPENING_ANGLE)
+def slice_boundary_angles(cfg: RenderConfig) -> Tuple[float, float]:
+    hw = cfg.slice_half_width()
+    return cfg.slice_center_angle - hw, cfg.slice_center_angle + hw
 
 
-def _apply_slice_mask(x: np.ndarray, y: np.ndarray, z: np.ndarray, theta_grid: np.ndarray):
-    mask = _slice_mask(theta_grid)
-    return (
-        np.where(mask, np.nan, x),
-        np.where(mask, np.nan, y),
-        np.where(mask, np.nan, z),
-    )
+def slice_hues(cfg: RenderConfig) -> Tuple[float, float]:
+    if cfg.slice_hue_override is not None:
+        return (cfg.slice_hue_override, cfg.slice_hue_override)
+    lower_angle, upper_angle = slice_boundary_angles(cfg)
+    return hue_from_angle(lower_angle), hue_from_angle(upper_angle)
 
 
-def _plot_hsv_cylinder(ax):
-    theta = np.linspace(0, 2 * np.pi, 360)
-    value = np.linspace(0.0, 1.0, 120)
+def plot_hsv_cylinder(ax, cfg: RenderConfig) -> None:
+    theta = np.linspace(0.0, 2 * np.pi, cfg.hsv_theta_steps)
+    value = np.linspace(0.0, 1.0, cfg.hsv_value_steps)
     theta_grid, value_grid = np.meshgrid(theta, value)
 
     x = np.cos(theta_grid)
     y = np.sin(theta_grid)
     z = value_grid
 
-    hue_norm = (theta_grid / (2 * np.pi)) % 1.0
-    sat = np.ones_like(hue_norm)
-    hsv = np.stack([hue_norm, sat, value_grid], axis=-1)
+    hues = (theta_grid / (2 * np.pi)) % 1.0
+    sat = np.ones_like(hues)
+    hsv = np.stack([hues, sat, value_grid], axis=-1)
     colors = hsv_to_rgb(hsv)
 
-    x, y, z = _apply_slice_mask(x, y, z, theta_grid)
+    mask = slice_mask(theta_grid, cfg.slice_center_angle, cfg.slice_half_width())
+    x = np.where(mask, x, np.nan)
+    y = np.where(mask, y, np.nan)
+    z = np.where(mask, z, np.nan)
 
-    ax.plot_surface(
-        x,
-        y,
-        z,
-        facecolors=colors,
-        linewidth=0,
-        antialiased=False,
-        shade=False,
-    )
-    _plot_hsv_disk(ax, z=0.0, value_level=0.0)
-    _plot_hsv_disk(ax, z=1.0, value_level=1.0)
-    _plot_hsv_slice_plane(ax)
-    _plot_slice_boundaries(ax, shape='hsv')
-    ax.set_title('HSV Cylinder', pad=16)
-    ax.set_box_aspect((1, 1, 1))
-    ax.set_axis_off()
+    ax.plot_surface(x, y, z, facecolors=colors, linewidth=0, antialiased=False, shade=False)
+
+    # Optional caps reuse the same mask logic so top and bottom align perfectly.
+    if cfg.draw_hsv_bottom_cap:
+        plot_hsv_disk(ax, z=0.0, value_level=0.0, cfg=cfg)
+    if cfg.draw_hsv_top_cap:
+        plot_hsv_disk(ax, z=1.0, value_level=1.0, cfg=cfg)
+
+    plot_hsv_slice_plane(ax, cfg)
+    ax.set_title("HSV cylinder", pad=10)
 
 
-def _plot_hsv_disk(ax, z: float, value_level: float):
-    radius = np.linspace(0.0, 1.0, 120)
-    theta = np.linspace(0, 2 * np.pi, 360)
+def plot_hsv_disk(ax, z: float, value_level: float, cfg: RenderConfig) -> None:
+    radius = np.linspace(0.0, 1.0, cfg.hsv_value_steps)
+    theta = np.linspace(0.0, 2 * np.pi, cfg.hsv_theta_steps)
     radius_grid, theta_grid = np.meshgrid(radius, theta)
 
     x = radius_grid * np.cos(theta_grid)
     y = radius_grid * np.sin(theta_grid)
     z_grid = np.full_like(x, z)
 
-    hue_norm = (theta_grid / (2 * np.pi)) % 1.0
-    sat = radius_grid
-    val = np.full_like(radius_grid, value_level)
-    hsv = np.stack([hue_norm, sat, val], axis=-1)
+    hues = (theta_grid / (2 * np.pi)) % 1.0
+    hsv = np.stack([hues, radius_grid, np.full_like(radius_grid, value_level)], axis=-1)
     colors = hsv_to_rgb(hsv)
 
-    x, y, z_grid = _apply_slice_mask(x, y, z_grid, theta_grid)
+    mask = slice_mask(theta_grid, cfg.slice_center_angle, cfg.slice_half_width())
+    x = np.where(mask, x, np.nan)
+    y = np.where(mask, y, np.nan)
+    z_grid = np.where(mask, z_grid, np.nan)
 
-    ax.plot_surface(
-        x,
-        y,
-        z_grid,
-        facecolors=colors,
-        linewidth=0,
-        antialiased=False,
-        shade=False,
-    )
+    ax.plot_surface(x, y, z_grid, facecolors=colors, linewidth=0, antialiased=False, shade=False)
 
 
-def _plot_hsl_double_cone(ax):
-    theta = np.linspace(0, 2 * np.pi, 360)
-    lightness = np.linspace(0.0, 1.0, 160)
+def plot_hsv_slice_plane(ax, cfg: RenderConfig) -> None:
+    """Draw the inner slice walls as rectangular cross-sections.
+    
+    Each wall spans from center (radius=0) to edge (radius=1) horizontally,
+    and from bottom (value=0) to top (value=1) vertically.
+    The hue matches the angle of that wall; saturation = radius; value = height.
+    """
+    # Build a grid where:
+    #   - columns (axis 1) = radius/saturation from 0 to 1
+    #   - rows (axis 0) = height/value from 0 to 1
+    n = cfg.hsv_value_steps
+    sat = np.linspace(0.0, 1.0, n)
+    value = np.linspace(0.0, 1.0, n)
+    # sat_grid[i, j] = sat[j], value_grid[i, j] = value[i]
+    sat_grid, value_grid = np.meshgrid(sat, value)
+
+    for angle in slice_boundary_angles(cfg):
+        # Compute the hue for this wall face from the angle
+        hue = cfg.slice_hue_override if cfg.slice_hue_override is not None else hue_from_angle(angle)
+        
+        # HSV color:
+        #   H = constant (the hue at this wall's angle)
+        #   S = sat_grid (0 at center = white, 1 at edge = full color)
+        #   V = value_grid (0 at bottom = dark, 1 at top = bright)
+        hsv = np.stack([
+            np.full_like(sat_grid, hue),
+            sat_grid,    # saturation = distance from center
+            value_grid,  # value = height (dark at bottom, bright at top)
+        ], axis=-1)
+        colors = hsv_to_rgb(hsv)
+
+        # Position the wall at the correct angle
+        # x, y = radius * cos/sin(angle), z = height
+        x = sat_grid * np.cos(angle)
+        y = sat_grid * np.sin(angle)
+        z = value_grid
+
+        ax.plot_surface(
+            x,
+            y,
+            z,
+            facecolors=colors,
+            linewidth=0,
+            antialiased=False,
+            shade=False,
+            zorder=10,  # ensure walls render on top
+        )
+
+
+def plot_hsl_double_cone(ax, cfg: RenderConfig) -> None:
+    theta = np.linspace(0.0, 2 * np.pi, cfg.hsl_theta_steps)
+    lightness = np.linspace(0.0, 1.0, cfg.hsl_lightness_steps)
     theta_grid, lightness_grid = np.meshgrid(theta, lightness)
 
     radius = 1.0 - np.abs(2.0 * lightness_grid - 1.0)
-    radius = np.clip(radius, 0.0, 1.0)
-
     x = radius * np.cos(theta_grid)
     y = radius * np.sin(theta_grid)
     z = lightness_grid
 
-    hue_norm = (theta_grid / (2 * np.pi)) % 1.0
-    sat = radius  # saturation tapers toward the axis, keeping the apex white
-    colors = _hls_to_rgb_array(hue_norm, lightness_grid, sat)
+    hues = (theta_grid / (2 * np.pi)) % 1.0
+    sat = radius
+    colors = hls_to_rgb_array(hues, lightness_grid, sat)
 
-    x, y, z = _apply_slice_mask(x, y, z, theta_grid)
+    mask = slice_mask(theta_grid, cfg.slice_center_angle, cfg.slice_half_width())
+    x = np.where(mask, x, np.nan)
+    y = np.where(mask, y, np.nan)
+    z = np.where(mask, z, np.nan)
 
-    ax.plot_surface(
-        x,
-        y,
-        z,
-        facecolors=colors,
-        linewidth=0,
-        antialiased=False,
-        shade=False,
-    )
-    ax.scatter([0], [0], [0], color='black', s=60, depthshade=False)
-    ax.scatter([0], [0], [1], color='white', edgecolors='black', s=60, depthshade=False)
-    _plot_hsl_slice_plane(ax)
-    _plot_slice_boundaries(ax, shape='hsl')
-    ax.set_title('HSL Double Cone', pad=16)
-    ax.set_box_aspect((1, 1, 1))
-    ax.set_axis_off()
+    ax.plot_surface(x, y, z, facecolors=colors, linewidth=0, antialiased=False, shade=False)
+    plot_hsl_slice_plane(ax, cfg)
+    ax.set_title("HSL double-cone", pad=10)
 
 
-def _plot_hsv_slice_plane(ax, angle: float = SLICE_FACE_ANGLE):
-    sat = np.linspace(0.0, 1.0, 200)
-    value = np.linspace(0.0, 1.0, 200)
-    sat_grid, value_grid = np.meshgrid(sat, value)
-
-    hue = SLICE_FACE_HUE
-    hsv = np.stack(
-        [
-            np.full_like(sat_grid, hue),
-            sat_grid,
-            value_grid,
-        ],
-        axis=-1,
-    )
-    colors = hsv_to_rgb(hsv)
-
-    x = sat_grid * np.cos(angle)
-    y = sat_grid * np.sin(angle)
-    z = value_grid
-
-    ax.plot_surface(
-        x,
-        y,
-        z,
-        facecolors=colors,
-        linewidth=0,
-        antialiased=False,
-        shade=False,
-    )
-
-
-def _plot_hsl_slice_plane(ax, angle: float = SLICE_FACE_ANGLE):
-    lightness = np.linspace(0.0, 1.0, 200)
-    saturation = np.linspace(0.0, 1.0, 200)
-    sat_grid, lightness_grid = np.meshgrid(saturation, lightness)
-
-    hue = SLICE_FACE_HUE
-    colors = _hls_to_rgb_array(
-        np.full_like(lightness_grid, hue),
-        lightness_grid,
-        sat_grid,
-    )
+def plot_hsl_slice_plane(ax, cfg: RenderConfig) -> None:
+    lightness = np.linspace(0.0, 1.0, cfg.hsl_lightness_steps)
+    sat = np.linspace(0.0, 1.0, cfg.hsl_lightness_steps)
+    sat_grid, lightness_grid = np.meshgrid(sat, lightness)
 
     radius_max = 1.0 - np.abs(2.0 * lightness_grid - 1.0)
     radius = sat_grid * radius_max
-    x = radius * np.cos(angle)
-    y = radius * np.sin(angle)
-    z = lightness_grid
 
-    ax.plot_surface(
-        x,
-        y,
-        z,
-        facecolors=colors,
-        linewidth=0,
-        antialiased=False,
-        shade=False,
-    )
+    for angle in slice_boundary_angles(cfg):
+        # Compute the hue for this wall face from the angle
+        hue = cfg.slice_hue_override if cfg.slice_hue_override is not None else hue_from_angle(angle)
+        
+        colors = hls_to_rgb_array(
+            np.full_like(lightness_grid, hue),
+            lightness_grid,
+            sat_grid,
+        )
 
+        x = radius * np.cos(angle)
+        y = radius * np.sin(angle)
+        z = lightness_grid
 
-def _plot_slice_boundaries(ax, shape: str):
-    boundary_angles = (
-        SLICE_FACE_ANGLE,
-        SLICE_MAX_ANGLE,
-    )
-    if shape == 'hsv':
-        z = np.linspace(0.0, 1.0, 80)
-        for angle in boundary_angles:
-            x = np.full_like(z, np.cos(angle))
-            y = np.full_like(z, np.sin(angle))
-            ax.plot3D(x, y, z, color='#333333', linewidth=1.4, linestyle='--')
-    elif shape == 'hsl':
-        lightness = np.linspace(0.0, 1.0, 120)
-        radius = 1.0 - np.abs(2.0 * lightness - 1.0)
-        for angle in boundary_angles:
-            x = radius * np.cos(angle)
-            y = radius * np.sin(angle)
-            ax.plot3D(x, y, lightness, color='#333333', linewidth=1.4, linestyle='--')
+        ax.plot_surface(
+            x,
+            y,
+            z,
+            facecolors=colors,
+            linewidth=0,
+            antialiased=False,
+            shade=False,
+        )
 
 
-def main():
+def configure_axes(ax) -> None:
+    ax.set_box_aspect((1, 1, 1))
+    ax.set_axis_off()
+    ax.view_init(elev=25, azim=35)
+
+
+def main() -> None:
+    cfg = RenderConfig()
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
-    ax_hsv = fig.add_subplot(1, 2, 1, projection='3d')
-    ax_hsl = fig.add_subplot(1, 2, 2, projection='3d')
 
-    _plot_hsv_cylinder(ax_hsv)
-    _plot_hsl_double_cone(ax_hsl)
+    ax_hsv = fig.add_subplot(1, 2, 1, projection="3d")
+    plot_hsv_cylinder(ax_hsv, cfg)
+    configure_axes(ax_hsv)
 
-    for ax in (ax_hsv, ax_hsl):
-        ax.view_init(elev=25, azim=35)
+    ax_hsl = fig.add_subplot(1, 2, 2, projection="3d")
+    plot_hsl_double_cone(ax_hsl, cfg)
+    configure_axes(ax_hsl)
 
-    output_path = Path('hsv_hsl_.svg')
-    plt.savefig(output_path, transparent=True)
-    print(f'Saved diagram to {output_path.resolve()}')
+    fig.suptitle("HSV vs HSL scaffold", fontsize=16)
+    fig.savefig(cfg.output_path, transparent=True)
+    print(f"Saved figure to {cfg.output_path.resolve()}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
