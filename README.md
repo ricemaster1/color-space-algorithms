@@ -79,10 +79,10 @@ Head to the docs page for math references, output previews, and automation tips 
 	```
 2. Install dependencies:
 	```bash
-	# pip (works in any environment)
+	# pip or pyenv
 	pip install -r requirements.txt
 
-	# conda (reads from requirements.txt)
+	# conda 
 	conda install --file requirements.txt -c conda-forge
 	```
 3. Mix quantizers, distance metrics, color transforms, and dithers as needed. For example, convert to Lab, run `k_means.py` with `distance_ciede2000.py`, then apply `stucki.py` for fine diffusion.
