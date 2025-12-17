@@ -228,6 +228,222 @@ def _add_hsv_wall_polys(all_verts: list, all_colors: list, angle: float, cfg: Re
             all_colors.append(rgb)
 
 
+def plot_hsv_double_cone(ax, cfg: RenderConfig) -> None:
+    """Double-cone geometry with HSV coloring (Value = height)."""
+    all_verts = []
+    all_colors = []
+    
+    # Build double-cone polygons (excluding sliced section)
+    left_angle, right_angle = slice_boundary_angles(cfg)
+    theta_start = right_angle
+    theta_end = left_angle + 2 * np.pi
+    
+    n_theta = cfg.hsv_theta_steps
+    n_value = cfg.hsv_value_steps
+    theta = np.linspace(theta_start, theta_end, n_theta)
+    value = np.linspace(0.0, 1.0, n_value)
+    
+    for i in range(n_value - 1):
+        for j in range(n_theta - 1):
+            t0, t1 = theta[j], theta[j + 1]
+            v0, v1 = value[i], value[i + 1]
+            
+            # Radius depends on value (double cone shape)
+            r0 = 1.0 - abs(2.0 * v0 - 1.0)
+            r1 = 1.0 - abs(2.0 * v1 - 1.0)
+            
+            quad = [
+                (r0 * np.cos(t0), r0 * np.sin(t0), v0),
+                (r0 * np.cos(t1), r0 * np.sin(t1), v0),
+                (r1 * np.cos(t1), r1 * np.sin(t1), v1),
+                (r1 * np.cos(t0), r1 * np.sin(t0), v1),
+            ]
+            all_verts.append(quad)
+            
+            t_mid = (t0 + t1) / 2
+            v_mid = (v0 + v1) / 2
+            h = hue_from_angle(t_mid)
+            # HSV coloring: saturation = 1 on surface
+            hsv = np.array([[[h, 1.0, v_mid]]])
+            rgb = hsv_to_rgb(hsv)[0, 0]
+            all_colors.append(rgb)
+    
+    # Add wall polygons (HSV-style walls on cone shape)
+    _add_hsv_cone_wall_polys(all_verts, all_colors, left_angle, cfg)
+    _add_hsv_cone_wall_polys(all_verts, all_colors, right_angle, cfg)
+    
+    # Sort by camera depth and render
+    cam_dir = _camera_direction()
+    sorted_verts, sorted_colors = _sort_polys_by_depth(all_verts, all_colors, cam_dir)
+    
+    poly = Poly3DCollection(sorted_verts, facecolors=sorted_colors, edgecolors='none')
+    ax.add_collection3d(poly)
+    
+    # Add annotations
+    _add_hue_labels(ax, radius=1.2, z=0.5)
+    _add_vertical_arrow(ax, x=-0.2, y=-1.3, z0=0.0, z1=1.0, label="Value", color='white')
+    _add_saturation_arrow(ax, angle=np.radians(200), z=0.5, r0=0.0, r1=1.0, color='white')
+
+    ax.set_title("HSV double-cone", pad=10, color='white')
+
+
+def _add_hsv_cone_wall_polys(all_verts: list, all_colors: list, angle: float, cfg: RenderConfig) -> None:
+    """Add HSV slice wall polygons for cone geometry."""
+    n = cfg.hsv_value_steps
+    hue = cfg.slice_hue_override if cfg.slice_hue_override is not None else hue_from_angle(angle)
+    
+    value = np.linspace(0.0, 1.0, n)
+    sat = np.linspace(0.0, 1.0, n)
+    
+    for i in range(n - 1):
+        for j in range(n - 1):
+            s0, s1 = sat[j], sat[j + 1]
+            v0, v1 = value[i], value[i + 1]
+            
+            # Radius depends on value (double cone shape)
+            r_max_0 = 1.0 - abs(2.0 * v0 - 1.0)
+            r_max_1 = 1.0 - abs(2.0 * v1 - 1.0)
+            
+            r00 = s0 * r_max_0
+            r10 = s1 * r_max_0
+            r01 = s0 * r_max_1
+            r11 = s1 * r_max_1
+            
+            quad = [
+                (r00 * np.cos(angle), r00 * np.sin(angle), v0),
+                (r10 * np.cos(angle), r10 * np.sin(angle), v0),
+                (r11 * np.cos(angle), r11 * np.sin(angle), v1),
+                (r01 * np.cos(angle), r01 * np.sin(angle), v1),
+            ]
+            all_verts.append(quad)
+            
+            s_mid = (s0 + s1) / 2
+            v_mid = (v0 + v1) / 2
+            hsv = np.array([[[hue, s_mid, v_mid]]])
+            rgb = hsv_to_rgb(hsv)[0, 0]
+            all_colors.append(rgb)
+
+
+def plot_hsl_cylinder(ax, cfg: RenderConfig) -> None:
+    """Cylinder geometry with HSL coloring (Lightness = height)."""
+    all_verts = []
+    all_colors = []
+    
+    # Build cylinder polygons (excluding sliced section)
+    left_angle, right_angle = hsl_slice_boundary_angles(cfg)
+    theta_start = right_angle
+    theta_end = left_angle + 2 * np.pi
+    
+    n_theta = cfg.hsl_theta_steps
+    n_light = cfg.hsl_lightness_steps
+    theta = np.linspace(theta_start, theta_end, n_theta)
+    lightness = np.linspace(0.0, 1.0, n_light)
+    
+    for i in range(n_light - 1):
+        for j in range(n_theta - 1):
+            t0, t1 = theta[j], theta[j + 1]
+            l0, l1 = lightness[i], lightness[i + 1]
+            
+            # Cylinder: radius = 1
+            quad = [
+                (np.cos(t0), np.sin(t0), l0),
+                (np.cos(t1), np.sin(t1), l0),
+                (np.cos(t1), np.sin(t1), l1),
+                (np.cos(t0), np.sin(t0), l1),
+            ]
+            all_verts.append(quad)
+            
+            t_mid = (t0 + t1) / 2
+            l_mid = (l0 + l1) / 2
+            h = hue_from_angle(t_mid)
+            # HSL coloring: saturation = 1 on surface
+            rgb = colorsys.hls_to_rgb(h, l_mid, 1.0)
+            all_colors.append(rgb)
+    
+    # Add wall polygons (HSL-style walls on cylinder shape)
+    _add_hsl_cyl_wall_polys(all_verts, all_colors, left_angle, cfg)
+    _add_hsl_cyl_wall_polys(all_verts, all_colors, right_angle, cfg)
+    
+    # Add cap polygons
+    _add_hsl_disk_polys(all_verts, all_colors, z=0.0, lightness_level=0.0, cfg=cfg)
+    _add_hsl_disk_polys(all_verts, all_colors, z=1.0, lightness_level=1.0, cfg=cfg)
+    
+    # Sort by camera depth and render
+    cam_dir = _camera_direction()
+    sorted_verts, sorted_colors = _sort_polys_by_depth(all_verts, all_colors, cam_dir)
+    
+    poly = Poly3DCollection(sorted_verts, facecolors=sorted_colors, edgecolors='none')
+    ax.add_collection3d(poly)
+    
+    # Add annotations
+    _add_hue_labels(ax, radius=1.2, z=0.5)
+    _add_vertical_arrow(ax, x=-0.2, y=-1.3, z0=0.0, z1=1.0, label="Lightness", color='white')
+    _add_saturation_arrow(ax, angle=np.radians(200), z=1.05, r0=0.0, r1=1.0, color='white')
+
+    ax.set_title("HSL cylinder", pad=10, color='white')
+
+
+def _add_hsl_cyl_wall_polys(all_verts: list, all_colors: list, angle: float, cfg: RenderConfig) -> None:
+    """Add HSL slice wall polygons for cylinder geometry."""
+    n = cfg.hsl_lightness_steps
+    hue = cfg.slice_hue_override if cfg.slice_hue_override is not None else hue_from_angle(angle)
+    
+    lightness = np.linspace(0.0, 1.0, n)
+    sat = np.linspace(0.0, 1.0, n)
+    
+    for i in range(n - 1):
+        for j in range(n - 1):
+            s0, s1 = sat[j], sat[j + 1]
+            l0, l1 = lightness[i], lightness[i + 1]
+            
+            x0, y0 = s0 * np.cos(angle), s0 * np.sin(angle)
+            x1, y1 = s1 * np.cos(angle), s1 * np.sin(angle)
+            
+            quad = [
+                (x0, y0, l0),
+                (x1, y1, l0),
+                (x1, y1, l1),
+                (x0, y0, l1),
+            ]
+            all_verts.append(quad)
+            
+            s_mid = (s0 + s1) / 2
+            l_mid = (l0 + l1) / 2
+            rgb = colorsys.hls_to_rgb(hue, l_mid, s_mid)
+            all_colors.append(rgb)
+
+
+def _add_hsl_disk_polys(all_verts: list, all_colors: list, z: float, lightness_level: float, cfg: RenderConfig) -> None:
+    """Add HSL disk cap polygons for cylinder."""
+    left_angle, right_angle = hsl_slice_boundary_angles(cfg)
+    theta_start = right_angle
+    theta_end = left_angle + 2 * np.pi
+    
+    n_theta = cfg.hsl_theta_steps // 4
+    n_radius = cfg.hsl_lightness_steps // 4
+    theta = np.linspace(theta_start, theta_end, n_theta)
+    radius = np.linspace(0.0, 1.0, n_radius)
+    
+    for i in range(n_radius - 1):
+        for j in range(n_theta - 1):
+            r0, r1 = radius[i], radius[i + 1]
+            t0, t1 = theta[j], theta[j + 1]
+            
+            quad = [
+                (r0 * np.cos(t0), r0 * np.sin(t0), z),
+                (r1 * np.cos(t0), r1 * np.sin(t0), z),
+                (r1 * np.cos(t1), r1 * np.sin(t1), z),
+                (r0 * np.cos(t1), r0 * np.sin(t1), z),
+            ]
+            all_verts.append(quad)
+            
+            t_mid = (t0 + t1) / 2
+            r_mid = (r0 + r1) / 2
+            h = hue_from_angle(t_mid)
+            rgb = colorsys.hls_to_rgb(h, lightness_level, r_mid)
+            all_colors.append(rgb)
+
+
 def plot_hsl_double_cone(ax, cfg: RenderConfig) -> None:
     all_verts = []
     all_colors = []
@@ -377,7 +593,7 @@ def _add_saturation_arrow(ax, angle: float, z: float, r0: float, r1: float, colo
 
 def main() -> None:
     cfg = RenderConfig()
-    fig = plt.figure(figsize=(16, 8))
+    fig = plt.figure(figsize=(20, 20))
     
     # Create dark gray radial gradient background
     ax_bg = fig.add_axes([0, 0, 1, 1])
@@ -398,19 +614,33 @@ def main() -> None:
     ax_bg.imshow(rgb_bg, extent=[0, 1, 0, 1], origin='lower', aspect='auto')
     ax_bg.axis('off')
 
-    ax_hsv = fig.add_subplot(1, 2, 1, projection="3d")
-    ax_hsv.set_facecolor((0, 0, 0, 0))  # Transparent to show gradient
+    # Row 1: HSV cylinder (left), HSL double-cone (right)
+    ax_hsv = fig.add_subplot(2, 2, 1, projection="3d")
+    ax_hsv.set_facecolor((0, 0, 0, 0))
     ax_hsv.patch.set_alpha(0)
     plot_hsv_cylinder(ax_hsv, cfg)
     configure_axes(ax_hsv, zoom=1.2)
 
-    ax_hsl = fig.add_subplot(1, 2, 2, projection="3d")
-    ax_hsl.set_facecolor((0, 0, 0, 0))  # Transparent to show gradient
+    ax_hsl = fig.add_subplot(2, 2, 2, projection="3d")
+    ax_hsl.set_facecolor((0, 0, 0, 0))
     ax_hsl.patch.set_alpha(0)
     plot_hsl_double_cone(ax_hsl, cfg)
     configure_axes(ax_hsl, zoom=1.2)
 
-    fig.suptitle("HSV vs HSL scaffold", fontsize=18, color='white', y=0.95)
+    # Row 2: HSV double-cone (left, under cylinder), HSL cylinder (right, under double-cone)
+    ax_hsv_cone = fig.add_subplot(2, 2, 3, projection="3d")
+    ax_hsv_cone.set_facecolor((0, 0, 0, 0))
+    ax_hsv_cone.patch.set_alpha(0)
+    plot_hsv_double_cone(ax_hsv_cone, cfg)  # HSV-colored double cone
+    configure_axes(ax_hsv_cone, zoom=1.2)
+
+    ax_hsl_cyl = fig.add_subplot(2, 2, 4, projection="3d")
+    ax_hsl_cyl.set_facecolor((0, 0, 0, 0))
+    ax_hsl_cyl.patch.set_alpha(0)
+    plot_hsl_cylinder(ax_hsl_cyl, cfg)  # HSL-colored cylinder
+    configure_axes(ax_hsl_cyl, zoom=1.2)
+
+    fig.suptitle("HSV vs HSL scaffold", fontsize=20, color='white', y=0.95)
     fig.savefig(cfg.output_path, facecolor=fig.get_facecolor(), edgecolor='none', dpi=150)
     print(f"Saved figure to {cfg.output_path.resolve()}")
 

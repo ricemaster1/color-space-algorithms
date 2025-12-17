@@ -12,15 +12,36 @@ The `algorithms/color_transforms/src/rgb_to_hsv_hsl.py` module converts arbitrar
 
 ## Cylindrical color context
 
-> “HSL and HSV are the two most common cylindrical-coordinate representations of points in an RGB color model. The two representations rearrange the geometry of RGB in an attempt to be more intuitive and perceptually relevant than the cartesian (cube) representation.” — Wikipedia contributors, *HSL and HSV* [@wikipedia-hsl]
+### Why RGB isn't enough
 
-That canonical description matches what the ARMLite workflow needs: a hue axis that wraps cleanly, plus independent saturation and lightness/value controls that reflect how artists reason about paint or shader parameters. The well-known twin-cone diagram from the article (licensed CC BY-SA 4.0) illustrates why hue neighborhoods feel continuous in HSV/HSL; recreate a derivative version for this repo by combining our local SVG wheel with saturation/value slices so we can ship an attribution-friendly asset instead of hotlinking the figure.
+RGB defines color as a point inside a cube—red, green, and blue axes meeting at right angles. That geometry mirrors how monitors mix light, but it fights against how humans *think* about color. We don't say "a bit more green channel"; we say "make it warmer" or "less saturated."
 
-Beyond Wikipedia, the CSS Color Module Level 4 specification [@w3c-color4] codifies how modern browsers interpret `hsl()` and `hsv()` syntax, offering concrete parameter ranges to mirror in CLI validation. Pair that guidance with Joblove & Greenberg’s original SIGGRAPH paper [@joblove1978] and Alvy Ray Smith’s gamut analysis [@smith1978hsv] to anchor both intuitive explanations and the underlying math.
+The RGB cube also has physical limits. As Joblove & Greenberg note, "the particular characteristics of three human receptor systems make it impossible for any such set of three primary colors to duplicate all colors" [@joblove1978, p. 20]. Colors outside the "color triangle" formed by the chosen primaries would require negative RGB values—mathematically valid but physically unrealizable. Still, "all colors which can be created can therefore be represented within a cubic volume in the all-positive octant of an orthogonal three-space whose axes are the rgb primaries" [@joblove1978, p. 21].
 
-![HSL and HSV models](img/Hsl-hsv_models.svg)
+An important concept here is **metamerism**: "Different spectral distributions can produce the same color sensation, or receptor responses. This phenomenon is known as metamerism; 'different' colors which appear the same as a result are called metamers" [@joblove1978, p. 20]. This is why we can represent a continuous spectrum with just three channels—and why two images can look identical on screen yet differ when printed.
 
-<small>Figure adapted from [Jacob Rus, “Hsl-hsv models”](https://commons.wikimedia.org/wiki/File:Hsl-hsv_models.svg), licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) via Wikimedia Commons.</small>
+The relationship between additive (RGB) and subtractive (CMY) primaries follows a simple inversion:
+
+$$
+[r \; g \; b] = [1 \; 1 \; 1] - [c \; m \; y]
+$$
+
+**Chromaticity**—the quality of color independent of brightness—"is the function of the ratios between the primary colors" [@joblove1978, p. 21]. This ratio-based thinking leads naturally to the "angular component" Joblove & Greenberg describe: wrapping hue around a cylinder so that color relationships become geometric angles rather than cube coordinates.
+
+### The cylindrical reshape
+
+HSV and HSL reshape the cube into cylinders. Both place **hue** on a circular axis (0–360°), so related colors—orange next to red, cyan next to blue—live as neighbors rather than at opposite corners. The vertical axis becomes **value** (HSV) or **lightness** (HSL), and the radial axis becomes **saturation**. The critical difference between the two models is what happens at the top:
+
+- **HSV cylinder:** Full value (V = 1) means maximum brightness of each hue. Pure white sits at the center of the top cap, while saturated colors ring the edge. The bottom collapses to black regardless of hue or saturation.
+- **HSL double-cone:** Lightness (L = 0.5) is where colors are most vivid; L = 0 is black and L = 1 is white. The shape tapers to points at both poles, which is why the cross-section forms a double cone.
+
+This rearrangement is what makes HSV and HSL feel intuitive: artists can tweak hue without disturbing brightness, or desaturate toward gray without shifting the underlying color. The figure below—rendered with matplotlib—shows both models sliced open so you can see the interior gradient from white (center) to saturated hue (edge).
+
+The CSS Color Module Level 4 specification [@w3c-color4] codifies how modern browsers interpret `hsl()` syntax, while Joblove & Greenberg's SIGGRAPH paper [@joblove1978] and Alvy Ray Smith's gamut analysis [@smith1978hsv] formalize the math. Together, they anchor the intuitive picture to rigorous colorimetry.
+
+![HSL and HSV models](img/hsv_hsl_.svg)
+
+<small>Diagram by the author, generated with matplotlib.</small>
 
 ---
 
@@ -118,14 +139,13 @@ Once the palette vectors are cached in HSV/HSL space (`_palette_space`), the ent
 Key design notes:
 - The search is brute-force but the palette is only 256 entries, so Python-level loops remain fast (~0.15 s on an M1 for 128×96 inputs).
 - Hue wrap ensures `h=0.99` and `h=0.01` behave as neighbors, critical for sprites heavy in magentas/reds.
-- Resizing happens before conversion to guarantee a consistent ARMLite screen fit. If you need custom resolutions, change the `(128, 96)` tuple and adjust the `generate_assembly` stride constant.
+- Path to any raster image PIL can open. It will be resized to 128×96 with antialiasing. Resizing happens before conversion to guarantee a consistent ARMLite screen fit. If you need custom resolutions, change the `(128, 96)` tuple and adjust the `generate_assembly` stride constant.
 
 ---
 
 ## CLI reference
 | Option | Description |
 | --- | --- |
-| `image` | Path to any raster image PIL can open. It will be resized to 128×96 with antialiasing. |
 | `-o / --output` | Assembly output path. Defaults to `converted.s`. |
 | `--space {hsv,hsl}` | Selects HSV (default) or HSL matching. HSV is better for emissive/glassy looks; HSL balances lightness for flat UI assets. |
 | `--weights H,S,V` | Comma-separated floats controlling the weighting metric. Use `1,1,1` to treat all channels evenly, or bias toward hue (`3,1,0.5`) for cel shading, etc. |
@@ -170,38 +190,8 @@ Document pipelines in `docs/pipelines.md` as you validate them so others can rep
 
 ---
 
-## Giving the transform a soul
-
-HSV/HSL math is clinical, but the sprites you feed it are not. When I run `rgb_to_hsv_hsl.py` on a dusk skyline, I start by nudging hue weight past 2 so oranges stay molten, then I sketch a note about what the scene is *supposed* to feel like—“sodium vapor, rain, patient neon.” That note becomes the constraint for every other parameter in the pipeline. Think of the CLI as a color diary: every weight triple is a tiny manifesto about what matters in the frame.
-
-Try this ritual:
-
-1. **Write a sentence** describing the mood before you touch the keyboard.
-2. **Map words to weights** (`vibrant` → high saturation, `somber` → high lightness).
-3. **Commit the combo** in `docs/pipelines.md` with a screenshot so the story travels with the codebase.
-
-These micro-stories keep ARMLite sprites from becoming sterile conversions. They remind contributors that we are not just minimizing distances—we are protecting the emotional gradients artists fought to paint in the first place.
-
----
-
-## Image assets
-- `docs/images/rgb-to-hsv-hsl-wheel.svg` – the hue wheel illustration shown at the top of this page.
-- `docs/images/rgb-to-hsv-hsl-contrast.svg` – compares HSV Value vs HSL Lightness midpoints.
-- `color_transforms/docs/img/Hsl-hsv_models.svg` – Jacob Rus’s CC BY-SA 3.0 twin-cone illustration (stored locally for offline docs builds).
-
-Embed them anywhere via Markdown (`![desc](../images/...)`) or include them in slide decks. If you capture before/after sprites, store PNGs alongside these SVGs following the naming convention `rgb-to-hsv-hsl-example-*.png` so documentation stays organized.
-
-![Value vs Lightness](../images/rgb-to-hsv-hsl-contrast.svg)
-
----
-
 ## Attribution & licensing
-- [1] Wikipedia contributors, “HSL and HSV,” *Wikipedia, The Free Encyclopedia*, CC BY-SA 4.0. Credit the article and include a link plus the license whenever you reuse or adapt the twin-cone illustration.
-- [2] World Wide Web Consortium, *CSS Color Module Level 4*, Editor’s Draft, <https://www.w3.org/TR/css-color-4/> — documents browser-facing `hsl()`/`hwb()` parameterization and is published under the W3C Document License.
-- Jacob Rus, “HSL and HSV Models,” Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Hsl-hsv_models.svg), licensed CC BY-SA 3.0 / GFDL. Our copy in `docs/img/` remains unmodified; include the attribution text shown beneath the figure if redistributed.
-
-Any new diagrams derived from third-party sources should either (a) be redrawn from scratch (preferred) or (b) bundled with the original CC BY-SA attribution text adjacent to the image so downstream users remain compliant.
-
+- [1] World Wide Web Consortium, *CSS Color Module Level 4*, Editor’s Draft, <https://www.w3.org/TR/css-color-4/> — documents browser-facing `hsl()`/`hwb()` parameterization and is published under the W3C Document License.
 ---
 
 ## Testing & validation checklist
@@ -223,9 +213,13 @@ Any new diagrams derived from third-party sources should either (a) be redrawn f
 ## Further reading
 - Joblove, G. H., & Greenberg, D. *Color Spaces for Computer Graphics*, SIGGRAPH 1978.
 - Smith, A. R. *Color Gamut Transform Pairs*, SIGGRAPH 1978.
-- Poynton, C. *Digital Video and HDTV: Algorithms and Interfaces*, Morgan Kaufmann, 2003.
+- Poynton, C. *Digital Video and HDTV: Algorithms and Interfaces*, Morgan Kaufmann, 2012.
 - Bruce Lindbloom, *Color Science and Technology*, https://www.brucelindbloom.com.
 - World Wide Web Consortium, *CSS Color Module Level 4*, https://www.w3.org/TR/css-color-4/.
-- Wikipedia contributors, “HSL and HSV,” *Wikipedia, The Free Encyclopedia*, https://en.wikipedia.org/wiki/HSL_and_HSV (CC BY-SA 4.0).
+
+- https://www.w3.org/TR/css-color-4/#rgb-to-hsl
+- https://archive.org/details/digital-video-and-hd-algorithms-and-interfaces-2nd-ed.-poynton-2012-02-07/page/215/mode/2up
+- https://jakevdp.github.io/PythonDataScienceHandbook/04.12-three-dimensional-plotting.html
+- https://www.geeksforgeeks.org/python/three-dimensional-plotting-in-python-using-matplotlib/
 
 Leverage these sources when extending the script—e.g., to add HCL or OKHSL variants—so the documentation keeps pace with the research pedigree.
