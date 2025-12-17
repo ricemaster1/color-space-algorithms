@@ -62,12 +62,82 @@ Each helper exposes the same ergonomics (`image`, optional `-o/--output`, and co
 Head to the docs page for math references, output previews, and automation tips (for example, chaining the transforms in a Makefile target).
 
 ## Running the Toolchain
-1. **Install Python 3.10+** if you don't have it:
-	- **macOS**: `brew install python@3.10` or download from [python.org](https://www.python.org/downloads/)
-	- **Linux**: `sudo apt install python3.10 python3.10-venv` (Debian/Ubuntu) or use your distro's package manager
-	- **Windows**: Download from [python.org](https://www.python.org/downloads/) — check "Add Python to PATH" during install
 
-2. Create and activate a Python 3.10 environment using your preferred workflow:
+1. **Get the code**:
+	
+	**Option A: Clone with Git (recommended)**
+	```bash
+	git clone https://github.com/ricemaster1/color-space-algorithms.git
+	cd color-space-algorithms/algorithms
+	```
+	
+	<details>
+	<summary><strong>🔧 Install Git if needed</strong></summary>
+
+	- **macOS**: `brew install git` or `xcode-select --install`
+	- **Windows**: Download from [git-scm.com](https://git-scm.com/download/win) or `winget install Git.Git`
+	- **Debian/Ubuntu**: `sudo apt install git`
+	- **Arch/Manjaro**: `sudo pacman -S git`
+	- **Fedora**: `sudo dnf install git`
+	- **openSUSE**: `sudo zypper install git`
+	- **Void**: `sudo xbps-install git`
+	- **Gentoo**: `sudo emerge -av dev-vcs/git`
+
+	</details>
+
+	**Option B: Download ZIP**
+	- Go to the [repository page](https://github.com/ricemaster1/color-space-algorithms)
+	- Click **Code → Download ZIP**
+	- Extract and navigate to the `algorithms` folder
+
+2. **Install Python 3.10+** if you don't have it:
+	- **macOS**: `brew install python@3.10` or download from [python.org](https://www.python.org/downloads/)
+	  <details>
+	  <summary><strong>🔧 Install Homebrew if needed</strong></summary>
+
+	  ```bash
+	  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+	  ```
+	  Then follow the instructions to add brew to your PATH. See [brew.sh](https://brew.sh/) for more info.
+
+	  </details>
+	- **Windows**: Download from [python.org](https://www.python.org/downloads/) — check "Add Python to PATH" during install
+	- **Linux**:
+		- Debian/Ubuntu: `sudo apt install python3.10 python3.10-venv`
+		- Arch/Manjaro: `sudo pacman -S python`
+		- Fedora: `sudo dnf install python3.10`
+		- RHEL/CentOS: `sudo dnf install python3.10` (enable EPEL if needed)
+		- openSUSE: `sudo zypper install python310`
+		- Void: `sudo xbps-install python3`
+		- Gentoo: `sudo emerge -av dev-lang/python:3.10`
+		- Alpine: `sudo apk add python3`
+		- NixOS: `nix-env -iA nixpkgs.python310` or add to `configuration.nix`
+
+3. <details>
+	<summary><strong>🔧 Installing environment managers</strong></summary>
+
+	**Conda (recommended)** — handles Python versions and packages in one tool:
+	- Download [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/download)
+	
+	**pyenv** — manages multiple Python versions (macOS/Linux only):
+	- macOS: `brew install pyenv`
+	- Linux: `curl https://pyenv.run | bash` (then add to shell config)
+	- See [pyenv installer](https://github.com/pyenv/pyenv-installer)
+	
+	**direnv** — auto-activates environments per directory:
+	- macOS: `brew install direnv`
+	- Debian/Ubuntu: `sudo apt install direnv`
+	- Arch/Manjaro: `sudo pacman -S direnv`
+	- Fedora: `sudo dnf install direnv`
+	- openSUSE: `sudo zypper install direnv`
+	- Void: `sudo xbps-install direnv`
+	- Gentoo: `sudo emerge -av dev-util/direnv`
+	- Add `eval "$(direnv hook zsh)"` (or bash/fish) to your shell config
+	- See [direnv.net](https://direnv.net/)
+
+	</details>
+
+3. Create and activate a Python 3.10 environment using your preferred workflow:
 	```bash
 	# stdlib venv (macOS/Linux)
 	python3 -m venv .venv
@@ -91,25 +161,7 @@ Head to the docs page for math references, output previews, and automation tips 
 	conda activate armlite-algos
 	```
 
-	<details>
-	<summary>Installing environment managers</summary>
-
-	**Conda (recommended)** — handles Python versions and packages in one tool:
-	- Download [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/download)
-	
-	**pyenv** — manages multiple Python versions (macOS/Linux only):
-	- macOS: `brew install pyenv`
-	- Linux: `curl https://pyenv.run | bash` (then add to shell config)
-	- See [pyenv installer](https://github.com/pyenv/pyenv-installer)
-	
-	**direnv** — auto-activates environments per directory:
-	- macOS: `brew install direnv`
-	- Linux: `sudo apt install direnv`
-	- Add `eval "$(direnv hook zsh)"` (or bash) to your shell config
-	- See [direnv.net](https://direnv.net/)
-
-	</details>
-2. Install dependencies:
+4. Install dependencies:
 	```bash
 	# pip or pyenv + direnv
 	pip install -r requirements.txt
@@ -117,7 +169,7 @@ Head to the docs page for math references, output previews, and automation tips 
 	# conda 
 	conda install --file requirements.txt -c conda-forge
 	```
-3. Mix quantizers, distance metrics, color transforms, and dithers as needed. For example, convert to Lab, run `k_means.py` with `distance_ciede2000.py`, then apply `stucki.py` for fine diffusion.
+5. Mix quantizers, distance metrics, color transforms, and dithers as needed. For example, convert to Lab, run `k_means.py` with `distance_ciede2000.py`, then apply `stucki.py` for fine diffusion.
 4. Load any generated `.s` file into the ARMLite simulator, assemble, and press Run to view the sprite.
 
 Pick any combination that suits your scene, and feel free to extend the collection with new modules that follow the same CLI conventions.
