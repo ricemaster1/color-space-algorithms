@@ -4,8 +4,15 @@ from PIL import Image
 import argparse
 import os
 import sys
+from pathlib import Path
 
-from armlite import closest_color
+# Ensure lib is importable when run as a script
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from lib import closest_color
 
 
 _BINS = 33  # 32 quantization buckets + 1 guard so we can use 1-based indexing

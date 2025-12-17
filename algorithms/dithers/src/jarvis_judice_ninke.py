@@ -2,8 +2,15 @@ from PIL import Image
 import argparse
 import os
 import sys
+from pathlib import Path
 
-from armlite import closest_color, ARMLITE_RGB
+# Ensure lib is importable when run as a script
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from lib import closest_color, ARMLITE_RGB
 
 
 def apply_jarvis_judice_ninke(img):

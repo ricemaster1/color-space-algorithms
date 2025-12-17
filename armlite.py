@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import webcolors
 import argparse
 import os
 import sys
@@ -10,7 +9,6 @@ import subprocess
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Set
 
@@ -19,11 +17,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 SCRIPTS_ROOT = PROJECT_ROOT / 'algorithms'
 
-from .rename_utils import GUI_AVAILABLE as GUI_RENAME_AVAILABLE
-from .rename_utils import launch_gui as rename_launch_gui
-from .rename_utils import prompt_cli as rename_prompt_cli
-from .rename_utils import undo_last as rename_undo_last
-from .rename_utils import iter_files as rename_iter_files
+from rename_utils import GUI_AVAILABLE as GUI_RENAME_AVAILABLE
+from rename_utils import launch_gui as rename_launch_gui
+from rename_utils import prompt_cli as rename_prompt_cli
+from rename_utils import undo_last as rename_undo_last
+from rename_utils import iter_files as rename_iter_files
 
 
 def _normalize_algo_key(raw: str) -> str:
@@ -104,43 +102,8 @@ try:
 except Exception:  # pragma: no cover
     curses = None  # type: ignore
 
-# ARMLite color names
-ARMLITE_COLORS = [
-    'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque',
-    'black', 'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood',
-    'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk',
-    'crimson', 'cyan', 'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray',
-    'darkgreen', 'darkgrey', 'darkkhaki', 'darkmagenta', 'darkolivegreen',
-    'darkorange', 'darkorchid', 'darkred', 'darksalmon', 'darkseagreen',
-    'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise',
-    'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue',
-    'firebrick', 'floralwhite', 'forestgreen', 'fuchsia', 'gainsboro', 'ghostwhite',
-    'gold', 'goldenrod', 'gray', 'green', 'greenyellow', 'grey', 'honeydew',
-    'hotpink', 'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush',
-    'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan',
-    'lightgoldenrodyellow', 'lightgray', 'lightgreen', 'lightgrey', 'lightpink',
-    'lightsalmon', 'lightseagreen', 'lightskyblue', 'lightslategray',
-    'lightslategrey', 'lightsteelblue', 'lightyellow', 'lime', 'limegreen', 'linen',
-    'magenta', 'maroon', 'mediumaquamarine', 'mediumblue', 'mediumorchid',
-    'mediumpurple', 'mediumseagreen', 'mediumslateblue', 'mediumspringgreen',
-    'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream', 'mistyrose',
-    'moccasin', 'navajowhite', 'navy', 'oldlace', 'olive', 'olivedrab', 'orange',
-    'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise',
-    'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue',
-    'purple', 'red', 'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown',
-    'seagreen', 'seashell', 'sienna', 'silver', 'skyblue', 'slateblue', 'slategray',
-    'slategrey', 'snow', 'springgreen', 'steelblue', 'tan', 'teal', 'thistle', 'tomato',
-    'turquoise', 'violet', 'wheat', 'white', 'whitesmoke', 'yellow', 'yellowgreen'
-]
-
-# Map to simple RGB tuples (r, g, b)
-def _to_tuple(rgb):
-    try:
-        return (rgb.red, rgb.green, rgb.blue)
-    except AttributeError:
-        return tuple(rgb)
-
-ARMLITE_RGB = {name: _to_tuple(webcolors.name_to_rgb(name)) for name in ARMLITE_COLORS}
+# Import palette constants and functions from the shared library
+from lib import ARMLITE_COLORS, ARMLITE_RGB, color_distance, closest_color
 
 ANSI_RESET = '\033[0m'
 ANSI_RED = '\033[91m'
@@ -160,23 +123,6 @@ class SingleValueAction(argparse.Action):
             flag = option_string or self.option_strings[-1]
             raise argparse.ArgumentError(self, f"{flag} may be provided at most once.")
         setattr(namespace, self.dest, values)
-
-def color_distance(c1, c2):
-    return (c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2
-
-@lru_cache(maxsize=65536)
-def closest_color(rgb):
-    if not isinstance(rgb, tuple):
-        rgb = tuple(rgb)
-    best = None
-    best_d = 10**9
-    for name, c in ARMLITE_RGB.items():
-        d = color_distance(rgb, c)
-        if d < best_d:
-            best_d = d
-            best = name
-    return best
-
 
 
 def run_external_algorithm(meta: ExternalAlgorithm, image_path: Path, output_path: Path, extra_args: str) -> None:

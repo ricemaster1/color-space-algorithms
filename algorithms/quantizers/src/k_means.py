@@ -5,8 +5,15 @@ import argparse
 import os
 import random
 import sys
+from pathlib import Path
 
-from armlite import ARMLITE_RGB, closest_color
+# Ensure lib is importable when run as a script
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from lib import ARMLITE_RGB, closest_color
 
 
 def _euclidean_sq(c1, c2):

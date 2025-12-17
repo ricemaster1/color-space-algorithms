@@ -6,9 +6,16 @@ import colorsys
 import math
 import os
 import sys
+from pathlib import Path
 from typing import Callable, Iterable, Tuple
 
-from armlite import ARMLITE_RGB, closest_color
+# Ensure lib is importable when run as a script
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from lib import ARMLITE_RGB, closest_color
 
 
 def _rgb_to_hsv(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
@@ -100,8 +107,8 @@ if __name__ == '__main__':
     )
     parser.add_argument('image', help='Path to input image')
     parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
-    parser.add_argument('--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
-    parser.add_argument('--weights', default='1,1,1', help='Comma-separated weights for hue,sat,value/lightness matching (default: 1,1,1)')
+    parser.add_argument('-s','--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
+    parser.add_argument('-w', '--weights', default='1,1,1', help='Comma-separated weights for hue,sat,value/lightness matching (default: 1,1,1)')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):

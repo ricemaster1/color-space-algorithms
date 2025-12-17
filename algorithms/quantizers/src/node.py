@@ -1,39 +1,18 @@
 from PIL import Image
-import webcolors
 import sys
 import os
 import argparse
 import math
+from pathlib import Path
 
-# ARMLite color palette
-ARMLITE_COLORS = [
-    'aliceblue','antiquewhite','aqua','aquamarine','azure','beige','bisque','black',
-    'blanchedalmond','blue','blueviolet','brown','burlywood','cadetblue','chartreuse',
-    'chocolate','coral','cornflowerblue','cornsilk','crimson','cyan','darkblue',
-    'darkcyan','darkgoldenrod','darkgray','darkgreen','darkgrey','darkkhaki','darkmagenta',
-    'darkolivegreen','darkorange','darkorchid','darkred','darksalmon','darkseagreen',
-    'darkslateblue','darkslategray','darkslategrey','darkturquoise','darkviolet','deeppink',
-    'deepskyblue','dimgray','dimgrey','dodgerblue','firebrick','floralwhite','forestgreen',
-    'fuchsia','gainsboro','ghostwhite','gold','goldenrod','gray','green','greenyellow',
-    'grey','honeydew','hotpink','indianred','indigo','ivory','khaki','lavender','lavenderblush',
-    'lawngreen','lemonchiffon','lightblue','lightcoral','lightcyan','lightgoldenrodyellow',
-    'lightgray','lightgreen','lightgrey','lightpink','lightsalmon','lightseagreen','lightskyblue',
-    'lightslategray','lightslategrey','lightsteelblue','lightyellow','lime','limegreen','linen',
-    'magenta','maroon','mediumaquamarine','mediumblue','mediumorchid','mediumpurple','mediumseagreen',
-    'mediumslateblue','mediumspringgreen','mediumturquoise','mediumvioletred','midnightblue','mintcream',
-    'mistyrose','moccasin','navajowhite','navy','oldlace','olive','olivedrab','orange','orangered','orchid',
-    'palegoldenrod','palegreen','paleturquoise','palevioletred','papayawhip','peachpuff','peru','pink','plum',
-    'powderblue','purple','red','rosybrown','royalblue','saddlebrown','salmon','sandybrown','seagreen',
-    'seashell','sienna','silver','skyblue','slateblue','slategray','slategrey','snow','springgreen',
-    'steelblue','tan','teal','thistle','tomato','turquoise','violet','wheat','white','whitesmoke','yellow',
-    'yellowgreen'
-]
+# Ensure lib is importable when run as a script
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
-# RGB lookup
-ARMLITE_RGB = {name: webcolors.name_to_rgb(name) for name in ARMLITE_COLORS}
+from lib import ARMLITE_RGB, color_distance
 
-def color_distance(c1, c2):
-    return sum((a-b)**2 for a,b in zip(c1,c2))
 
 def top_n_colors(rgb, n):
     sorted_colors = sorted(ARMLITE_RGB.items(), key=lambda x: color_distance(rgb, x[1]))
