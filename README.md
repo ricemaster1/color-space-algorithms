@@ -77,7 +77,14 @@ Head to the docs page for math references, output previews, and automation tips 
 	conda create -n armlite-algos python=3.10
 	conda activate armlite-algos
 	```
-2. Install dependencies: `pip install pillow webcolors numpy scipy` (some scripts mention extra packages in their headers; install those as needed).
+2. Install dependencies:
+	```bash
+	# pip (works in any environment)
+	pip install -r requirements.txt
+
+	# conda (reads from requirements.txt)
+	conda install --file requirements.txt -c conda-forge
+	```
 3. Mix quantizers, distance metrics, color transforms, and dithers as needed. For example, convert to Lab, run `k_means.py` with `distance_ciede2000.py`, then apply `stucki.py` for fine diffusion.
 4. Load any generated `.s` file into the ARMLite simulator, assemble, and press Run to view the sprite.
 

@@ -1,0 +1,6 @@
+pillow>=10.0.0
+webcolors>=1.13
+numpy>=1.24.0
+scipy>=1.11.0
+matplotlib>=3.7.0
+spectra>=0.0.11

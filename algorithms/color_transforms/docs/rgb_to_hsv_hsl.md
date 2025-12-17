@@ -1,8 +1,3 @@
----
-title: "`rgb_to_hsv_hsl.py` Deep Dive"
-bibliography: references.bib
----
-
 # `rgb_to_hsv_hsl.py` 
 # Deep Dive
 
