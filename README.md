@@ -62,24 +62,56 @@ Each helper exposes the same ergonomics (`image`, optional `-o/--output`, and co
 Head to the docs page for math references, output previews, and automation tips (for example, chaining the transforms in a Makefile target).
 
 ## Running the Toolchain
-1. Create and activate a Python 3.10 environment using your preferred workflow:
+1. **Install Python 3.10+** if you don't have it:
+	- **macOS**: `brew install python@3.10` or download from [python.org](https://www.python.org/downloads/)
+	- **Linux**: `sudo apt install python3.10 python3.10-venv` (Debian/Ubuntu) or use your distro's package manager
+	- **Windows**: Download from [python.org](https://www.python.org/downloads/) — check "Add Python to PATH" during install
+
+2. Create and activate a Python 3.10 environment using your preferred workflow:
 	```bash
-	# stdlib venv
+	# stdlib venv (macOS/Linux)
 	python3 -m venv .venv
 	source .venv/bin/activate
 
-	# pyenv + direnv
+	# stdlib venv (Windows CMD)
+	python -m venv .venv
+	.venv\Scripts\activate.bat
+
+	# stdlib venv (Windows PowerShell)
+	python -m venv .venv
+	.venv\Scripts\Activate.ps1
+
+	# pyenv + direnv (macOS/Linux)
 	pyenv virtualenv 3.10 armlite-algos
 	echo "layout python python3" > .envrc
 	direnv allow
 
-	# conda
+	# conda (all platforms) — recommended
 	conda create -n armlite-algos python=3.10
 	conda activate armlite-algos
 	```
+
+	<details>
+	<summary>Installing environment managers</summary>
+
+	**Conda (recommended)** — handles Python versions and packages in one tool:
+	- Download [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/download)
+	
+	**pyenv** — manages multiple Python versions (macOS/Linux only):
+	- macOS: `brew install pyenv`
+	- Linux: `curl https://pyenv.run | bash` (then add to shell config)
+	- See [pyenv installer](https://github.com/pyenv/pyenv-installer)
+	
+	**direnv** — auto-activates environments per directory:
+	- macOS: `brew install direnv`
+	- Linux: `sudo apt install direnv`
+	- Add `eval "$(direnv hook zsh)"` (or bash) to your shell config
+	- See [direnv.net](https://direnv.net/)
+
+	</details>
 2. Install dependencies:
 	```bash
-	# pip or pyenv
+	# pip or pyenv + direnv
 	pip install -r requirements.txt
 
 	# conda 
