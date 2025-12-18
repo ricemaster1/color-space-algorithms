@@ -40,7 +40,7 @@ The CSS Color Module Level 4 specification [@w3c-color4] codifies how modern bro
 
 ---
 
-## Mathematical backbone
+## Formulae and functions
 
 Normalize each pixel’s channels to `[0,1]` so `r = R/255`, `g = G/255`, `b = B/255`. Following the construction laid out by Joblove & Greenberg and later summarized by Smith [@joblove1978; @smith1978hsv], define
 
@@ -86,6 +86,90 @@ $$
 
 with the hue branch identical to HSV. All trigonometric work inside `colorsys` happens on normalized angles (`H \in [0,1)`), so the script later wraps hue distances in that same domain.
 
+### Reconstructing RGB from hue
+
+To reverse the process—going from a hue angle back to its pure RGB color on the unit hexagon—Joblove & Greenberg provide a set of piecewise linear functions. Given normalized hue $h \in [0,1)$, the RGB components of the fully saturated color are [@joblove1978, p. 22]:
+
+$$
+r = \begin{cases}
+1 & \text{if } h \le \tfrac{1}{6} \text{ or } h > \tfrac{5}{6} \\[4pt]
+2 - 6h & \text{if } \tfrac{1}{6} \le h \le \tfrac{2}{6} \\[4pt]
+0 & \text{if } \tfrac{2}{6} \le h \le \tfrac{4}{6} \\[4pt]
+6h - 4 & \text{if } \tfrac{4}{6} \le h \le \tfrac{5}{6}
+\end{cases}
+$$
+
+$$
+g = \begin{cases}
+6h & \text{if } 0 \le h \le \tfrac{1}{6} \\[4pt]
+1 & \text{if } \tfrac{1}{6} \le h \le \tfrac{3}{6} \\[4pt]
+4 - 6h & \text{if } \tfrac{3}{6} \le h \le \tfrac{4}{6} \\[4pt]
+0 & \text{if } \tfrac{4}{6} \le h < 1
+\end{cases}
+$$
+
+$$
+b = \begin{cases}
+0 & \text{if } 0 \le h \le \tfrac{2}{6} \\[4pt]
+6h - 2 & \text{if } \tfrac{2}{6} \le h \le \tfrac{3}{6} \\[4pt]
+1 & \text{if } \tfrac{3}{6} \le h \le \tfrac{5}{6} \\[4pt]
+6 - 6h & \text{if } \tfrac{5}{6} \le h < 1
+\end{cases}
+$$
+
+Each channel ramps linearly across $\tfrac{1}{6}$ of the hue circle (60°), creating the familiar six-sector structure: red → yellow → green → cyan → blue → magenta → red. The factor of 6 appears because the hue wheel is partitioned into six equal segments, each spanning $\tfrac{1}{6}$ of the normalized range.
+
+However, these piecewise linear ramps have a perceptual cost: "Because the function is non-continuous, hue series will exhibit Mach banding (the illusion of overly light or dark areas) at the discontinuities due to the tendency of the human visual system to enhance such variations in luminance for any of the three receptor systems" [@joblove1978, p. 22].
+
+To mitigate this, Joblove & Greenberg propose a cosine-smoothed variant that eliminates the sharp corners:
+
+$$
+[r \; g \; b] = \frac{[1 \; 1 \; 1] + \cos\bigl([1 \; 1 \; 1] - [r' \; g' \; b']\bigr)\pi}{2}
+$$
+
+where $r'$, $g'$, and $b'$ are the piecewise linear values from the functions above. The cosine term smooths the linear ramps into sinusoidal curves, producing gradual transitions at the sector boundaries and reducing the perceived Mach bands.
+
+### Intensity and chroma scaling
+
+To produce colors at arbitrary intensity and saturation levels—not just the fully saturated hues on the hexagon boundary—Joblove & Greenberg introduce a two-branch formula that scales by relative chroma $c$ and intensity $i$ (each on the range 0 to 1) [@joblove1978, p. 22]:
+
+$$
+[r \; g \; b] = \begin{cases}
+\bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] + c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) \cdot 2i & \text{if } i \le \tfrac{1}{2} \\[8pt]
+\bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] + c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) + \bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] - c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) \cdot (2 - 2i) & \text{if } i \ge \tfrac{1}{2}
+\end{cases}
+$$
+
+where "$c$ is the relative chroma and $i$ is the intensity (each on the range 0 to 1), and $[r' \; g' \; b']$ is computed using an equation such as" the piecewise or cosine-smoothed forms above [@joblove1978, p. 22].
+
+This construction traces its lineage to **The Munsell Color System (1905)**, which introduced the perceptual coordinates still used today: **Munsell hue**, **Munsell value** (lightness relative to a reference white), and **Munsell chroma** (colorfulness relative to gray). As Joblove & Greenberg describe: "The grays are linearly interpolated on a straight line (the cylindrical axis) from black to white; the colors which are of maximum chroma for their respective hues (for the given rgb display space) are located on a circle centered on the gray axis and perpendicularly intersecting it halfway between the black point and white point" [@joblove1978, p. 22]. This geometric arrangement—gray axis at the center, saturated hues at maximum radius, intensity controlling vertical position—is exactly the double-cone structure that HSL inherits.
+
+### From double-cone to cylinder: the HSV construction
+
+The double-cone arises naturally from chroma and intensity, but a different parameterization yields the HSV cylinder. Joblove & Greenberg explain [@joblove1978, p. 22]:
+
+> In a color space defined by hue, chroma, and intensity, all the colors of a given saturation define a conical surface whose apex is the black point (at which the saturation is undefined). A color space may be defined in which the radial component is directly related to saturation by letting that component be
+>
+> $$s = \frac{\max(r,g,b) - \min(r,g,b)}{\max(r,g,b)}$$
+>
+> Furthermore, the axial component can be specified to correspond to that component of color which is equal (and maximal) for all the colors representing the maximum intensities for all chromaticities and zero for black. In other words, the circle of maximum-chroma colors can be located so its center intersects the cylindrical axis at the white point.
+
+This axial component is what they call **value**. In this color space, "the color solid is a right circular cylinder whose 'top' base is a circularized chromaticity diagram, whose 'bottom' base is black, and whose cylindrical surface" contains the desaturated variants of each hue [@joblove1978, p. 22]. The key insight is that by defining saturation relative to `max(r,g,b)` rather than the full black-to-white span, the apex of the cone lifts to form a flat top—hence the cylinder rather than the double-cone of HSL.
+
+The cylindrical surface "contains the maximum-saturation colors for all hues and lightnesses" [@joblove1978, p. 23]. For a color in this space, the RGB reconstruction is:
+
+$$
+[r \; g \; b] = \bigl([1 \; 1 \; 1] + s \cdot ([r' \; g' \; b'] - [1 \; 1 \; 1])\bigr) \cdot v
+$$
+
+"where $s$ is the saturation and $v$ is the 'value' (each on the range 0 to 1), and $[r' \; g' \; b']$ is computed using" the piecewise or cosine-smoothed hue equations [@joblove1978, p. 23].
+
+#### Triangular variants and CIE coordinates
+
+The circular cross-section is a convenience, not a requirement. Joblove & Greenberg note: "Alternative variants of this arrangement are possible. If the bases of the cylinder, instead of being circles, are triangles with the primaries at the vertices, any section corresponds to the color triangle in the chromaticity diagram" [@joblove1978, p. 23].
+
+This observation opens a path toward standards-based color: "This suggests the possibility of defining a color space based on the CIE (Commission Internationale de l'Éclairage or International Commission on Illumination) x,y chromaticity coordinates, the standard system established by that organization in 1931. Existing transformations could then be used to work in other CIE standard coordinate systems" [@joblove1978, p. 23]—a prescient comment given that CIE L\*a\*b\* and CIEDE2000 are now the workhorses of perceptual color difference calculations.
+
 ### Weighted palette metric
 
 The closure returned by `_weighted_distance` implements
@@ -113,7 +197,7 @@ Once the palette vectors are cached in HSV/HSL space (`_palette_space`), the ent
 
 ---
 
-## Color theory + research backdrop
+## Sources 
 - **HSV/HSL origins:** Joblove & Greenberg’s *Color Spaces for Computer Graphics* (SIGGRAPH 1978) details the intuitive hue-saturation-lightness cylinders used here [@joblove1978]. Their work inspired modern paint-pickers and underpins the formulas exposed by Python's `colorsys`.
 - **Gamut transform math:** Alvy Ray Smith's *Color Gamut Transform Pairs* (1978) proves that hue-first spaces prevent gamut clipping when mapping between RGB primaries [@smith1978hsv]. Our transform inherits those guarantees when constraining to the ARMLite palette.
 - **Digital video practice:** Charles Poynton's *Digital Video and HDTV* (Morgan Kaufmann, 2003) recommends HSV-style processing for highlight preservation before quantization [@poynton2003]. The same advice applies to sprite art where saturated highlights matter.
