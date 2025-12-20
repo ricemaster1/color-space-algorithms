@@ -7,6 +7,14 @@ The `algorithms/color_transforms/src/rgb_to_hsv_hsl.py` module converts arbitrar
 
 ## Cylindrical color context
 
+### The RGB monitor gamut
+
+Before exploring alternative color models, it's worth defining exactly what we mean by "RGB." Smith describes it as "the gamut of colors spanned by the red, green, and blue (RGB) electron guns exciting their respective phosphors. It is called the RGB monitor gamut" [@smith1978hsv, p. 12]. This physical grounding matters: RGB isn't an abstract mathematical space but "a set of alternative models of the RGB monitor gamut based on the perceptual variables hue (H), saturation (S), and value (V) or brightness (L)" [@smith1978hsv, p. 12].
+
+Smith frames color mathematically: "a color is a vector in a (finite) 3-dimensional space where the dimensions R, G and B are called the primaries" [@smith1978hsv, p. 12]. This vector-space view means any linear transformation of the primaries yields another valid (if perhaps less intuitive) color space.
+
+Digital displays approximate the continuous analog signal with discrete steps: "In computer graphics, the guns are digitally controlled, the full analog range of each gun being approximated by $n = 2^m$ distinct equally spaced values. For $m \ge 8$, most humans cannot perceive the difference between analog or digital control, the discrete and continuous become one perceptually" [@smith1978hsv, p. 12]. This perceptual equivalence at 8 bits per channel is why 24-bit "true color" became the standard—and why ARMLite's palette, even with far fewer colors, can still produce recognizable imagery when dithered intelligently.
+
 ### Why RGB isn't enough
 
 RGB defines color as a point inside a cube—red, green, and blue axes meeting at right angles. That geometry mirrors how monitors mix light, but it fights against how humans *think* about color. We don't say "a bit more green channel"; we say "make it warmer" or "less saturated."
@@ -22,6 +30,31 @@ $$
 $$
 
 **Chromaticity**—the quality of color independent of brightness—"is the function of the ratios between the primary colors" [@joblove1978, p. 21]. This ratio-based thinking leads naturally to the "angular component" Joblove & Greenberg describe: wrapping hue around a cylinder so that color relationships become geometric angles rather than cube coordinates.
+
+### Alternative primaries: the IQY transformation
+
+Because color forms a linear vector space, we can transform between coordinate systems. Smith notes that "a new set of primaries I, Q, and Y also form a linear space" [@smith1978hsv, p. 12]. The transformation from RGB to IQY (used in NTSC television encoding) is:
+
+$$
+\begin{bmatrix}
+I \\
+Q \\
+Y
+\end{bmatrix}
+=
+\begin{bmatrix}
+0.60 & -0.28 & -0.32 \\
+0.21 & -0.52 & 0.31 \\
+0.30 & 0.59 & 0.11
+\end{bmatrix}
+\begin{bmatrix}
+R \\
+G \\
+B
+\end{bmatrix}
+$$
+
+This matrix illustrates a key principle: the choice of primaries is arbitrary as long as the transformation is invertible. YIQ separates luminance (Y) from chrominance (I, Q), which allowed early color television to remain backward-compatible with black-and-white sets. HSV and HSL take this idea further by making one axis explicitly perceptual (hue as an angle) rather than optimizing for broadcast engineering.
 
 ### The cylindrical reshape
 
