@@ -15,6 +15,12 @@ Smith frames color mathematically: "a color is a vector in a (finite) 3-dimensio
 
 Digital displays approximate the continuous analog signal with discrete steps: "In computer graphics, the guns are digitally controlled, the full analog range of each gun being approximated by $n = 2^m$ distinct equally spaced values. For $m \ge 8$, most humans cannot perceive the difference between analog or digital control, the discrete and continuous become one perceptually" [@smith1978hsv, p. 12]. This perceptual equivalence at 8 bits per channel is why 24-bit "true color" became the standard—and why ARMLite's palette, even with far fewer colors, can still produce recognizable imagery when dithered intelligently.
 
+#### Gamma correction and the linearity assumption
+
+Smith's analysis assumes the monitor behaves linearly, but CRTs are inherently nonlinear: "the light intensity emitted by the cathode ray tube in a television monitor is a nonlinear function of its driving voltages. Hence the assumption of linearity implies the existence of a black box between the numbers used for digital input and the numbers actually used to digitally control the input voltages. This black box compensates for the nonlinearity of the cathode ray tube. It can be implemented as a simple lookup table and is called a gamma-correction, or compensation, table" [@smith1978hsv, p. 12].
+
+This distinction matters for color transforms: the HSV and HSL formulas operate on *linear* RGB values. When working with typical 8-bit images (which are gamma-encoded for display), accurate color manipulation requires linearizing first, transforming, then re-encoding. For palette matching in ARMLite sprites, the error introduced by skipping linearization is usually acceptable—but for scientific visualization or color-critical work, proper gamma handling is essential.
+
 ### Why RGB isn't enough
 
 RGB defines color as a point inside a cube—red, green, and blue axes meeting at right angles. That geometry mirrors how monitors mix light, but it fights against how humans *think* about color. We don't say "a bit more green channel"; we say "make it warmer" or "less saturated."
@@ -71,6 +77,40 @@ The CSS Color Module Level 4 specification [@w3c-color4] codifies how modern bro
 
 <small>Diagram by the author, generated with matplotlib.</small>
 
+### The hexcone model: Smith's geometric derivation
+
+Smith calls the HSV model the **hexcone model** because of its geometric construction. The key insight comes from projecting the RGB cube along its main diagonal:
+
+> "If the colorcube is projected along its main diagonal (the gray axis) onto a plane perpendicular to the diagonal, a hexagonal disk (a hexagon and its interior) results. The interior points are those colors one would see looking at the colorcube along its gray axis in the direction from white to black. For each value of gray, there is an associated subcube of the colorcube. Corresponding to each subcube—ie, to each gray value—is a projection as before. As the gray level changes from 0 (black) to 1 (white), one moves from one hexagonal disk to the next. Each disk is larger than the preceding one, with the disk for black being a point. This is the hexcone." [@smith1978hsv, p. 13]
+
+The hexcone model "is an attempt to transform the RGB colorcube dimensions into a set of dimensions modeling the artist's method of mixing. These are called hue, saturation, and value (HSV). Varying H corresponds to traversing the color circle. Decreasing S (desaturation) corresponds to increasing whiteness, and decreasing V (devaluation) corresponds to increasing blackness" [@smith1978hsv, p. 13].
+
+#### The color bar interpretation
+
+Smith provides an elegant visual explanation: "A color is represented by three bars. It is obtained by mixing R, G, and B in the proportions implied by the lengths of the three bars. V is simply the height of the tallest bar. If X is the height of the smallest bar, then $(X, X, X)$ is the gray which is desaturating the color. Subtracting the 'DC-level' of gray from the color leaves the hue information as a proportional mix of two primaries" [@smith1978hsv, p. 13].
+
+This leads to a key observation: "a color is a mixture of at most three primaries, a hue of at most two primaries, and a primary, of course, of one primary" [@smith1978hsv, p. 13].
+
+#### The saturation formula derivation
+
+Smith derives saturation geometrically from the hexagonal disk. For a point P in the disk, saturation S is "the ratio $WP / WP'$, where $WP'$ is the intersection of the extension of WP with the nearest side of the triangle." Working through the geometry:
+
+$$S = \frac{V - \min(R, G, B)}{V}$$
+
+"Notice that $S = 1$ implies at least one of R, G, or B is 0. For disk 1, this bounding hexagon may be identified with the color circle" [@smith1978hsv, p. 14].
+
+#### Handling the achromatic singularity
+
+The gray axis presents a special case: "Special care must be exercised at the singular points $S = 0$—ie, where $R = G = B$, the gray, or achromatic, axis of the hexcone. Hue is not defined along this axis. Often the hue is simply immaterial at such a gray point. A practice which frequently succeeds is to define H at a singularity to be what it was as a result of the last call to the transform. Smooth traversals of the gamut tend to leave H at a reasonable definition using this technique" [@smith1978hsv, p. 13].
+
+### Value versus brightness: a critical distinction
+
+Smith emphasizes that value (V) and brightness/lightness (L) measure fundamentally different things:
+
+> "The distinction between value and brightness is important. It is illustrated by this example: Red, white, and yellow all have the same value (no blackness), but red has one third the brightness of white (using definition $L_u$), and one half the brightness of yellow. The principal distinction between the two is the manner in which the pure (fully saturated) hues are treated. There is a plane containing all the pure hues in HSV space, but not in HSL space. Hence V would be used where the pure hues are to be given equal weight—eg, in a painting program. L would be used where colors must be distinguished by their brightness—eg, in choosing colors for an animated cartoon such that the colors are distinguishable even on a black-and-white television receiver." [@smith1978hsv, p. 12]
+
+This distinction directly impacts palette selection for ARMLite: if your sprite needs to read well in grayscale (accessibility, monochrome displays), HSL matching preserves luminance contrast. If you want vibrant, saturated colors to have equal visual weight, HSV is the better choice.
+
 ---
 
 ## Formulae and functions
@@ -118,6 +158,27 @@ S &= \begin{cases}
 $$
 
 with the hue branch identical to HSV. All trigonometric work inside `colorsys` happens on normalized angles (`H \in [0,1)`), so the script later wraps hue distances in that same domain.
+
+### The triangle model: generalized brightness
+
+Smith's **triangle model** generalizes the double-cone to arbitrary brightness definitions. The normalized color coordinates are:
+
+$$r = \frac{w_R R}{L}, \quad g = \frac{w_G G}{L}, \quad b = \frac{w_B B}{L}$$
+
+where the generalized brightness is:
+
+$$L = w_R R + w_G G + w_B B$$
+
+with weights satisfying $w_R + w_G + w_B = 1$ and $w_R, w_G, w_B \ge 0$. "All such normalized colors fall in the plane $r + g + b = 1$ and are bounded by the equilateral triangle" [@smith1978hsv, p. 15].
+
+Two cases are particularly important:
+
+1. **Unbiased case**: $w_R = w_G = w_B = \tfrac{1}{3}$, giving $L_u = (R + G + B) / 3$
+2. **NTSC case**: $w_R = 0.30$, $w_G = 0.59$, $w_B = 0.11$, giving $L_n = Y$ (luminance)
+
+"The gray points, $R = G = B$, all map into $W = (w_R, w_G, w_B)$." In the unbiased case, the gray point is at the centroid $(\tfrac{1}{3}, \tfrac{1}{3}, \tfrac{1}{3})$. In the NTSC case, "the gray point $(0.30, 0.59, 0.11)$ is 'biased' away from the centroid of the equilateral triangle" [@smith1978hsv, p. 15].
+
+Smith connects this to classical colorimetry: "The triangle so obtained is an example of what is known in color theory as a chromaticity diagram. The most famous such diagram is that from 1931 of the CIE (Commission Internationale de l'Eclairage). It includes the entire human color gamut" [@smith1978hsv, p. 16]. The RGB monitor gamut appears as a triangular subset within the CIE diagram—demonstrating that displays can only reproduce a fraction of human-visible colors.
 
 ### Reconstructing RGB from hue
 
@@ -220,6 +281,24 @@ which mirrors the perceptual heuristics Poynton recommends for highlight-preserv
 
 Once the palette vectors are cached in HSV/HSL space (`_palette_space`), the entire pixel search becomes a geometric problem on cylinders rather than a brute RGB cube walk, and that simple reframing is what lets this script feel like a tool with opinions rather than a generic converter.
 
+### Computational considerations: hexcone vs. triangle
+
+Smith explicitly addresses performance in the 1978 paper, and his observations remain relevant:
+
+> "The transform pair derived from the hexcone model (RGB to HSV) require no trigonometric or other expensive functions. Hence they are quite fast, a fact of considerable importance when they are to be performed at the pixel level in a frame buffer." [@smith1978hsv, p. 19]
+
+In contrast, "the triangle model transforms (RGB to HSL) are too slow to be used in software form in interactive situations such as painting because of the function calls to sqrt(), arctan(), and cos()" [@smith1978hsv, p. 19]. Smith suggests that "approximations to these functions (eg, linear interpolation between values in a lookup table for cos()) would lead to speedier response, especially if implemented in microcode" [@smith1978hsv, p. 19].
+
+For ARMLite sprite conversion, both models are fast enough—we process at most 12,288 pixels (128×96), and Python's `colorsys` module uses the optimized hexcone algorithms. The choice between HSV and HSL should be driven by the artistic goal, not performance.
+
+### Practical application: tint painting
+
+Smith describes a compelling use case that illuminates why these transforms matter:
+
+> "In the RGB paint program at NYIT there is a type of painting called tint paint. Here the user selects a color to paint with. Its tint (H and S) is extracted by use of the RGB to HSV transform. Now painting in a frame buffer can be thought of as overwriting a small 2-dimensional subset of a large 2-dimensional array... Tint painting is the following variation on simple painting: At a point (pixel) about to be written in the frame buffer, an RGB to HSV transform is performed to extract the value V there. A new color is formed from the tint the user selected and V of the pixel. An application of the HSV to RGB transform converts the color to usable form, and then it is written into the pixel." [@smith1978hsv, p. 19]
+
+This technique—preserving value while replacing hue and saturation—is exactly what colorization workflows do today. For ARMLite, a similar approach could let artists "paint" a grayscale sprite with palette-constrained hues while respecting the original shading.
+
 ---
 
 ## Why run HSV/HSL on ARMLite sprites?
@@ -232,7 +311,7 @@ Once the palette vectors are cached in HSV/HSL space (`_palette_space`), the ent
 
 ## Sources 
 - **HSV/HSL origins:** Joblove & Greenberg’s *Color Spaces for Computer Graphics* (SIGGRAPH 1978) details the intuitive hue-saturation-lightness cylinders used here [@joblove1978]. Their work inspired modern paint-pickers and underpins the formulas exposed by Python's `colorsys`.
-- **Gamut transform math:** Alvy Ray Smith's *Color Gamut Transform Pairs* (1978) proves that hue-first spaces prevent gamut clipping when mapping between RGB primaries [@smith1978hsv]. Our transform inherits those guarantees when constraining to the ARMLite palette.
+- **Gamut transform math:** Alvy Ray Smith's *Color Gamut Transform Pairs* (SIGGRAPH 1978) derives both the hexcone (HSV) and triangle (HSL) models with complete RGB↔HSV and RGB↔HSL algorithms [@smith1978hsv]. Smith's hexcone transforms—used successfully at Xerox PARC and NYIT for frame buffer painting programs since 1974—avoid trigonometric functions entirely, making them fast enough for real-time pixel manipulation. The triangle model generalizes brightness to include NTSC luminance ($Y = 0.30R + 0.59G + 0.11B$) as a special case.
 - **Digital video practice:** Charles Poynton's *Digital Video and HDTV* (Morgan Kaufmann, 2003) recommends HSV-style processing for highlight preservation before quantization [@poynton2003]. The same advice applies to sprite art where saturated highlights matter.
 - **Perceptual caveats:** Bruce Lindbloom's colorimetry reference documents why HSV/HSL are not perceptually uniform [@lindbloom]; weighting hue and saturation compensates for that non-linearity, which is why the script exposes explicit weights.
 

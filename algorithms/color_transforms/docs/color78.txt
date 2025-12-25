@@ -1,0 +1,783 @@
+Color Gamut Transform Pairs
+Alvy Ray Smith
+Computer Graphics Lab
+New York Institute of Technology
+Old Westbury, NY 11568
+Published in: SIGGRAPH 78 Conference Proceedings, Aug 1978, 12-19. Reprinted in Tutorial: Computer Graphics, edited by John C Beatty and Kellogg S Booth, IEEE Computer Society Press, Silver
+Spring, MD, 2nd edition, 1982, 376-383 (but this item is missing from the Table of Contents!) The
+document was reentered by Alvy Ray Smith in Microsoft Word form on 3 Dec 1999. Spelling and
+punctuation are generally preserved, but trivially minor spelling errors are corrected. Otherwise
+additions or changes made to the original are noted inside square brackets. The following note
+accompanies the original document:
+Permission to copy without fee all or part of this material is granted provided that the copies are
+not made or distributed for direct commercial advantage, the ACM copyright notice and the title
+of the publication and its date appear, and notice is given that copying is by permission of the
+Association for Computing Machinery. To copy otherwise, or to republish, requires a fee and/or
+specific permission.
+©1978 ACM
+
+Abstract
+Digital control of color television monitors—in particular, via frame buffers—has added precise control of a large subset of human colorspace to the capabilities of computer graphics. This subset is the gamut of colors spanned by the
+red, green, and blue (RGB) electron guns exciting their respective phosphors. It is
+called the RGB monitor gamut. Full-blown color theory is a quite complex subject
+involving physics, psychology, and physiology, but restriction to the RGB monitor gamut simplifies matters substantially. It is linear, for example, and admits to
+familiar spatial representations. This paper presents a set of alternative models of
+the RGB monitor gamut based on the perceptual variables hue (H), saturation (S),
+and value (V) or brightness (L). Algorithms for transforming between these models are derived. Particular emphasis is placed on an RGB to HSV nontrigonometric pair of transforms which have been used successfully for about four years in
+frame buffer painting programs. These are fast, accurate, and adequate in many
+applications. Computationally more difficult transform pairs are sometimes necessary, however. Guidelines for choosing among the models are provided. Psychophysical corrections are described within the context of the definitions established by the NTSC (National Television Standards Committee).
+KEY WORDS AND PHRASES: color, gamut, hue, saturation, value, brightness, luminance, NTSC, color transform.
+CR CATEGORY: 8.2, 3.41, 3.17.
+
+Color Gamut Transform Pairs
+
+2
+
+Introduction
+
+A color television monitor with independent video inputs to each of its red,
+green, and blue guns is an RGB monitor. The range of colors produced by the
+guns of an RGB monitor is its gamut. In computer graphics, the guns are digitally
+controlled, the full analog range of each gun being approximated by n = 2 m distinct and equally spaced values. For m ≥ 8 , most humans cannot perceive the difference between analog and digital control, the discrete and continuous become
+one perceptually. For this reason, we shall use the term gamut to refer to both the
+continuous gamut defined above and the digital approximation to it which is the
+primary concern of this paper.
+We shall assume that an RGB monitor is a linear device. But the light intensity emitted by the cathode ray tube in a television monitor is a nonlinear function of its driving voltages. Hence the assumption of linearity implies the existence of a black box between the numbers used for digital input and the numbers
+actually used to digitally control the input voltages. This black box compensates
+for the nonlinearity of the cathode ray tube. It can be implemented as a simple
+lookup table and is called a gamma-correction, or compensation, table. Hence an
+RGB monitor is assumed to contain a gamma-correction table (perhaps in software) for each gun. It is this combination which is thought of as a linear device.
+Since the three guns of an RGB monitor can be varied independently and
+must have nonnegative input less than a given maximum rating, its gamut can
+be represented by a cube (Fig. 1). We shall refer to this “natural” gamut model as
+the (RGB) colorcube.
+In the colorcube model, a color is a vector in a (finite) 3-dimensional space
+where the dimensions R, G, and B are called the primaries. The coordinate system
+is a rectangular one. It is a simple space in which familiar linear algebra operations hold. For example, Plate 1 shows the result of applying the following simple linear transform to the RGB colorcube of Fig. 1:
+ I  .60 −.28 −.32   R 
+Q  = .21 −.52 .31  G 
+  
+ 
+Y  .30 .59
+.11   B 
+Thus the new set of primaries I, Q, and Y also form a linear space. They are, in
+fact, the transmission primaries recommended by the NTSC (National Television
+Standards Committee) in 1953 [3] as a basis for generating the broadcast color
+television signal in the US. The Y dimension, called luminance, measures the
+brightness perceived by a human watching a typical home television receiver
+(and is, in fact, the only signal received by a black-and-white set). That is, IQY
+space can be considered a psychophysical adjustment of RGB space which takes
+into account both the properties of the RGB phosphors and the perceptions of the
+so-called standard observer [2].
+In this paper we explore two gamut models, both with polar coordinate systems. In some situations, such as color mixing, these models are more intuitively
+satisfying or more convenient to an artist than the colorcube. Hence we derive
+algorithms for transforming between these alternative models and the colorcube.
+A transform pair consists of the algorithm for transforming from the colorcube to
+
+Color Gamut Transform Pairs
+
+3
+
+one of the alternatives and the inverse algorithm for transforming back to the
+colorcube. We also indicate when it is advantageous to use one or the other of the
+models instead of the colorcube. In particular, the NTSC space will be a special
+case of only one of them.
+The first of the two new models, the hexcone model, is intended to capture the
+common notions of hue, saturation, and value (HSV) as three dimensions for describing a color. Briefly, hue is the dimension with points on it normally called
+red, yellow, blue-green, etc. Saturation measures the departure of a hue from
+achromatic, ie, from white or gray. Value measures the departure of a hue from
+black, the color of zero energy. These terms, defined more carefully in a following section, are meant to capture the artistic ideas of hue, tint, shade, and tone illustrated in Plate 2.
+The other model, the triangle model, has the closely related dimensions hue,
+saturation, and brightness (HSL). (Alternative names for brightness are lightness
+and intensity. The distinction is sometimes made that brightness refers to selfluminous objects and lightness to non-self-luminous objects. We maintain this
+distinction here but use the symbol L to avoid conflict with B for blue. An alternative for saturation is chroma although the distinction is sometimes made that
+saturation is a relative measure of color “purity”, or non-whiteness, while
+chroma is absolute.) Hue and saturation are as for the hexcone model, but
+brightness measures the energy in a color instead of its non-blackness. We might
+define it by
+Lu = ( R + G + B) / 3 ,
+the denominator serving merely to normalize the brightness into the range [0, 1].
+The definition we shall introduce in a later section is much more general than
+this, however. It includes, for example,
+Ln = Y = .30 R + .59G + .11B
+which is NTSC luminance. So the triangle model is actually a class of models.
+The two running examples of it in this paper will correspond to brightness definitions Lu , the unbiased case, and Ln , the NTSC case.
+The distinction between value and brightness is important. It is illustrated by
+this example: Red, white, and yellow all have the same value (no blackness), but
+red has one third the brightness of white (using definition Lu ), and one half the
+brightness of yellow. The principal distinction between the two is the manner in
+which the pure (fully saturated) hues are treated. There is a plane containing all
+the pure hues in HSV space, but not in HSL space. Hence V would be used
+where the pure hues are to be given equal weight—eg, in a painting program. L
+would be used where colors must be distinguished by their brightness—eg, in
+choosing colors for an animated cartoon such that the colors are distinguishable
+even on a black-and-white television receiver.
+
+Background and Experience
+Transform pairs based on the hexcone model have been used successfully in
+painting programs at Xerox PARC (Palo Alto Research Center) for four years and
+NYIT (New York Institute of Technology) for three years. At both of these computer graphics installations, digital control of an RGB monitor is exercised via a
+
+Color Gamut Transform Pairs
+
+4
+
+frame buffer (or picture memory), a piece of memory large enough to hold one
+video frame in digital form. The frame buffer contents can be viewed on an RGB
+monitor thirty times a second—ie, at video rate.
+The triangle model is a generalization of a model derived at SRI (Stanford
+Rseearch Institute) [4]. In that reference, a transform from RGB to HSL for what
+we call the unbiased case is derived. The inverse transform from HSL to RGB is
+derived here.
+
+The Hexcone Model
+
+A person using a computer to control an RGB monitor could, by varying
+each of the primaries, mix any color he desired (if, of course, it were one of the n 3
+colors in the gamut). The reader can try this mixing technique by mentally varying R, G, and B to obtain, say, pink or brown. It is not unusual to have difficulty.
+Following is an alternative way, mimicing the way an artist mixes paints on his
+palette: He chooses a pure hue, or pigment, and lightens it to a tint of that hue by
+adding white, or darkens it to a shade of that hue by adding black, or in general
+obtains a tone of that hue by adding some mixture of white and black, a gray [1].
+Plate 2 summarizes these terms.
+The hexcone model is an attempt to transform the RGB colorcube dimensions
+into a set of dimensions modeling the artist’s method of mixing. These are called
+hue, saturation, and value (HSV). Varying H corresponds to traversing the color
+circle. Decreasing S (desaturation) corresponds to increasing whiteness, and decreasing V (devaluation) corresponds to increasing blackness. Following is a
+simple interpretation of these dimensions. Then we state the RGB to HSV color
+transform pair of algorithms and proceed to derive them. The derivation contains a detailed description of the geometry of the hexcone model.
+
+Color Bar Interpretation of HSV
+
+A color is represented in Plate 4 by three bars. It is obtained by mixing R, G,
+and B in the proportions implied by the lengths of the three bars. It is convenient
+to understand HSV in terms of this representation. V is simply the height of the
+tallest bar. If X is the height of the smallest bar, then ( X , X , X ) is the gray which
+is desaturating the color. Subtracting the “DC-level” of gray from the color,
+leaves the hue information as a proportional mix of two primaries. This leads us
+to the observation that a color is a mixture of at most three primaries, a hue of a
+most two primaries, and a primary, of course, of one primary.
+
+RGB to HSV Algorithm (Hexcone Model)
+
+Given: R, G, and B, each on domain [0, 1].
+Desired: The equivalent H, S, and V, each on range [0, 1].
+1. V := max( R , G, B);
+2. Let X := min( R , G, B);
+V−X
+3. S :=
+; if S = 0 return;
+V
+V−R
+V −G
+V −B
+4. Let r :=
+; g :=
+; b :=
+;
+V−X
+V−X
+V−X
+
+Color Gamut Transform Pairs
+
+5
+
+If R = V then H := (if G = X then 5 + b else 1 − g );
+if G = V then H := (if B = X then 1 + r else 3 − b );
+else H := (if R = X then 3 + g else 5 − r );
+H
+6. H := ;
+6
+Remarks: 1) H = 0 is taken to be red (ie, G = B and R > B ) by convention. 2) Special care must be exercised at the singular points S = 0 —ie, where R = G = B , the
+gray, or achromatic, axis of the hexcone. Hue is not defined along this axis. Often
+the hue is simply immaterial at such a gray point. A practice which frequently
+succeeds is to define H at a singularity to be what is was as a result of the last call
+to the transform. Smooth traversals of the gamut tend to leave H at a reasonable
+definition using this technique.
+5.
+
+HSV to RGB Algorithm (Hexcone Model)
+
+Given: H, S, and V, each on domain [0, 1].
+Desired: The equivalent R, G, and B, each on range [0, 1].
+1. H := 6 * H ;
+2. Let I := floor( H ) ; F := H − I ;
+3. Let M := V ∗ (1 − S ) ; N := V ∗ (1− S ∗ F ) ; K := V ∗ (1− S ∗ (1− F )) ;
+4. Switch on I into
+case 0: ( R , G, B) := (V ,K , M ) ;
+case 1: ( R , G, B) := (N , V , M ) ;
+case 2: ( R , G, B) := ( M , V , K ) ;
+case 3: ( R , G, B) := ( M, N, V ) ;
+case 4: ( R , G, B) := (K , M, V ) ;
+case 5: ( R , G, B) := (V , M, N) ;
+Remarks: 1) floor(x) is the integer just less than or equal x. 2) Only one case is
+executed in the switch statement. 3) The expression ( R ,G , B ) := ( X , Y , Z ) abbreviates R := X ; G := Y ; B := Z .
+
+Derivation of the Hexcone Model
+If the colorcube is projected along its main diagonal (the gray axis) onto a
+plane perpendicular to the diagonal, a hexagonal disk (a hexagon and its interior) results (Plate 3). The interior points are those colors one would see looking
+at the colorcube along its gray axis in the direction from white to black. For each
+value of gray, there is an associated subcube of the colorcube (Fig. 1). Corresponding to each subcube—ie, to each gray value—is a projection as before. As
+the gray level changes from 0 (black) to 1 (white), one moves from one hexagonal
+disk to the next. Each disk is larger than the preceding one, with the disk for
+black being a point. This is the hexcone. Each disk can be thought of as the three
+“brightest” faces of the associated subcube projected onto a plane. The projection
+is scaled so that the length of a side of the colorcube in the projection equals the
+
+Color Gamut Transform Pairs
+
+6
+
+length of a side in the solid. Notice that by specifying V, one has specified that at
+least one of R, G, or B equals V, and none is larger. Hence V = max( R , G, B) .
+Consider any one disk in the hexcone (selected by varying V). H and S must
+specify a point in this disk. In the hexcone model, H is taken to be the angle and S
+is taken to be the length of a vector centered on the gray point of the disk. In
+Plate 3 the loci of constant S are shown for one disk. They are hexagons. So when
+we speak of the angle H, we imply a proportional length along these hexagonal
+loci, not along circles. S is assumed to be a relative length, relative to the longest
+possible radius at the given angle.
+S varies from 0 to 1 in each disk. S = 0 implies the color is gray value V for
+disk V (centered at gray value V) regardless of hue. S = 1 implies a color lying on
+the bounding hexagon of disk V. Notice that S = 1 implies at least one of R, G, or
+B is 0. For disk 1, this bounding hexagon may be identified with the color circle.
+As H is varied from 0 to 1 around this hexagon (saturation locus), the two of R,
+G, and B which are nonzero are specified (and one of these, of course, is 1). Thus
+V determines one primary, and the vector of length S and angle H determines the
+other two. This is how we compute saturation from RGB:
+Consider the hexagonal disk in Fig. 2 which is divided into three sectors
+which are subdivided by the dashed lines to form six sextants. Let IJ be the
+length of the vector from arbitrary point I to arbitrary point J in this figure. Then
+S for the color at point P is
+WP
+WD WY − DY
+S=
+=
+=
+.
+WP′ WY
+WY
+For disk V each side of the hexagon has length V; hence WY = V . For P in the
+sector shown ( −60o ≤ H ≤ 60o ), R = V . The sextant in this sector into which P falls
+depends on which of the other two primaries is smaller. In this example, B is the
+smallest component so P falls in the sextant for which 0o ≤ H ≤ 60o . Notice that
+B = DY and G = V − PD in this sextant. So DY = min( R , G, B) in this sextant,
+and
+V − min( R, G, B )
+S=
+.
+V
+Similar arguments for each of the other five sextants show this to be a general relationship for all H.
+The relationship for H can be derived from the same figure. For P in the sextant shown, H (on range [0, 1]) is
+AP
+EP − EA
+EP − AF
+H=
+=
+=
+.
+AD
+AD
+AD
+But G = EP and B = AF and AD = WD implies1
+G − min(R , G, B )
+H=
+V − min( R, G, B)
+
+1 Typo
+
+AB = WD in the original
+
+Color Gamut Transform Pairs
+
+7
+
+in this sextant. The exact expression for H is dependent on the sextant but can be
+derived similarly. The results are summarized in the statement of the algorithm
+above.
+Fig. 2 can also be used to derive the inverse of the transform derived above.
+For P in the sextant shown R > G and R > B hence R = V . S in this sextant is
+WP
+WD WY − DY V − B
+S=
+=
+=
+=
+.
+WP′ WY
+WY
+V
+Thus
+
+B = V (1 − S ) .
+H (on domain [0, 1]) in this sextant is
+AP
+EP − EA G − B
+H=
+=
+=
+.
+AD
+ED − EA V − B
+Substituting the expression just derived for B yields
+G = V (1− S (1− H )) .
+Similar derivations can be made in each sextant to obtain the results in the algorithm statement above.
+
+The Triangle Model
+Consider the normalization of a given color ( R , G, B) defined by
+wR
+wG
+w B
+r= R
+g= G
+b= B
+L
+L
+L
+where
+L = wR R + wGG + w B B
+is the generalized brightness and weights
+wR ≥ 0 wG ≥ 0 wB ≥ 0
+and
+wR + wG + wB = 1 .
+All such normalized colors fall in the plane
+r +g +b =1
+and are bounded by the equilateral triangle shown in Fig. 3. The gray points,
+R = G = B , all map into
+W = ( wR , wG , wB ) .
+For example, if wR = wG = wB = 13 , the gray point is ( 13 , 13 , 13 ) . This special case, as
+mentioned earlier, is called the unbiased case (Plate 5). Another case of special interest mentioned earlier is the NTSC case for which wR = .30 , wG = .59 , wB = .11 .
+Hence L = Ln = Y is the normalization factor in the NTSC case. The gray point
+(.30,.59,.11) is “biased” away from the centroid of the equilateral triangle (Fig. 5).
+The triangle so obtained is an example of what is known in color theory as a
+chromaticity diagram [2]. The most famous such diagram is that from 1931 of the
+CIE (Commission Internationale de l’Eclairage), shown in Fig. 4. It includes the
+entire human color gamut. We include it to cast the current paper in appropriate
+perspective: The gamuts of two RGB monitors are shown as triangular subsets.
+
+Color Gamut Transform Pairs
+
+8
+
+The larger is the 1953 NTSC recommended gamut, and the smaller that of an actual modern gamut (for a Barco monitor at NYIT).
+
+RGB to HSL Algorithm (Triangle Model)
+
+Given: R, G, and B, each on domain [0, 1].
+Desired: The equivalent H, S, and L, each on range [0, 1].
+1. L := wR ∗ R + wG ∗ G + wB ∗ B;
+2.
+
+R
+G
+B
+; g ′ := ; b′ := ;
+L
+L
+L
+Let r := wR * r ′ ; g := wG * g ′ ; b := wB * b′ ;
+Let r ′ :=
+
+Let rr := r − wR ; gg := g − wG ; bb := b − wB ;
+3.
+
+S := 1− min( r′, g′, b′) ; if S = 0 return;
+
+4.
+
+Let k 0 := sqrt( rr 2 + gg 2 + bb2 ) ;
+Let w′R := 1 − wR ;
+Let d := w ′R * rr −wG * gg − wB * bb ;
+2
+2
+2
+Let k1 := sqrt(w′R + wG + wB ) ;
+
+Let x :=
+
+d
+;
+k0 ∗ k1
+
+
+
+x
+H := 90o − arctan 
+;
+2 
+ sqrt(1 − x ) 
+6. If b′ > g ′ then H := 360o − H ;
+H
+7. H :=
+;
+360o
+Remarks: As in the hexcone model, H = 0 at red by convention, and the gray axis
+is a locus of singularities in H.
+5.
+
+HSL to RGB Algorithm (Triangle Model)
+
+Given: H, S, and L, each on domain [0, 1].
+Desired: The equivalent R, G, and B, each on range [0, 1].
+1. H := H *360 o ;
+2. Compute angles a0 := A(PRWPG ) and a1 := A(PGWPB ) (in degrees);
+3. Compute angles A0 := A(RR WQR ) , A1 := A( RG WQG ) , and A2 := A( RB WQB ) ;
+4. If 0 ≤ H ≤ a0 then
+begin
+H := H + A0 ;2
+b := wB ∗ (1 − S ) ;
+2[
+
+− A0 in the original.]
+
+Color Gamut Transform Pairs
+
+9
+
+cos( H )
+;
+cos(60o − H )
+
+r := wR + w B ∗ S ∗
+g := 1− (r + b ) ;
+end
+
+else if a0 ≤ H ≤ (a 0 + a1 ) then
+begin
+H := H − a0 + A1 ;3
+r := wR ∗ (1 − S ) ;
+cos( H )
+;
+cos(60o − H )
+
+g := wG + w R ∗ S ∗
+b := 1− ( r + g ) ;
+end
+else
+begin
+
+H := H − a0 − a1 + A2 ;4
+g := wG ∗ (1− S ) ;
+b := wB + wG ∗ S ∗
+
+cos( H )
+;
+cos(60o − H )
+
+r := 1− ( g + b) ;
+end
+5.
+
+R := L ∗
+
+r
+g
+b 5
+; G := L ∗
+; B := L ∗
+;
+wR
+wG
+wB
+
+Remarks: 1) For ease of presentation, it is assumed that the user has at his disposal a procedure TRIANGLE which computes, for a given set of weights, all
+constant angles and lengths in the equilateral triangle associated with the triangle model (Fig. 5). See derivation below. 2) As opposed to the hexcone model, it
+is possible to transform HSL on the given domains into unrealizable RGB values
+(R, G, or B > 1 ) because the gamut is finite. For example, this is the case if L = 1
+and S > 0 . It is not difficult to derive, although we do not do so here, a set of realizability conditions for computing when this will happen6 .
+
+Examples
+
+The unbiased case:
+
+3[
+4[
+
+− A1 in the original.]
+− A2 in the original.]
+
+5 [The multiplier L was omitted in all three cases in the original.]
+6 [See NYIT Tech Memo No 8 for these conditions.]
+
+Color Gamut Transform Pairs
+
+10
+
+wR = wG = wB = 13
+a0 = a1 = 120o
+A0 = A1 = A2 = 0o
+The NTSC case:
+
+wR = .30 wG = .59 wB = .11
+a0 = 156.58o
+A0 = −21.60o
+
+a1 = 115.68o
+
+A1 =14.98 o
+
+A2 =10.65 o
+
+Derivation of the Triangle Model
+As mentioned above, there is assumed to be a procedure TRIANGLE with
+which any constant concerning the triangle in Fig. 5 can be computed, given
+weights wR , wG , and wB . Two types of constants are computed by TRIANGLE,
+angles and lengths. For 3-dimensional points X, Y, and Z, XY represents the
+length of the vector from X to Y, as before. A( XYZ ) represents the angle at Y between vector YX and vector YZ . The following observations about the geometry
+of the triangle are useful in the derivation:
+1. The lines PQ
+i i , i = R, G, B , all intersect at W by construction.
+2. The line PR QR is the locus of points ( r ′, g′, b′) for which g ′ = b′ .
+3. Any point in the planar region bounded by triangle PR QR PG has g ′ ≥ b′ . Any
+point in PR QR PB has b′ ≥ g ′ . Hence PR QR separates the g ′ > b′ region from the
+g ′ < b′ region. Similarly, PG QG separates the b′ > r ′ region from the r ′ < b′ region, and PB QB separates the r ′ > g ′ region from the r ′ < g ′ region.
+4. For i = R , G, or B, WQi PQ
+PQ
+i i = wi and WPi
+i i = 1 − wi .
+5. The RG sector is the region bounded by WPR PG . The GB sector is the region
+bounded by WPG PB , and the BR sector is the region bounded by WPB PR .
+As in the hexcone model, H and S of an arbitrary color are defined with respect to a vector from the gray point W. Let the normalized color be represented
+by point P. Then H is the angle A(PR WP) , and S is the ratio WP WP′ , where WP′
+is the intersection of the extension of WP with the nearest side of the triangle ( in
+the case shown in Figs. 3 and 5).
+Consider Fig. 3 for computing S in terms of R, G, and B. T is the projection of
+W onto the rg plane parallel the b axis. Q is the projection of P onto WT parallel
+the rg plane.
+WP
+WQ WT − QT
+S=
+=
+=
+.
+WP′ WT
+WT
+But WT = wB and QT = b in the sector shown; hence
+S = 1 − b′ .
+But b′ = min(r ′, g′, b′ ) in the RG sector. In fact, an argument similar to that above
+for P in each of the other two sectors shows the relationship
+S = 1 − min( r′ , g′ , b′) .
+to be true in general.
+Fig. 5 will be used to compute H. For 0o ≤ H ≤ 180o
+
+Color Gamut Transform Pairs
+
+11
+
+WPR gWP = WPR WP cos( H ) .
+where g is the dot product. But WP = k0 , WPR = k1 , and WPR gWP = d as defined in
+the algorithm statement. Let
+d
+x=
+.
+k0 k1
+Then H = arccos( x ) . If b′ > g ′ , then H must be greater than 180°. So in this case H
+is replaced by 360o − H to remain within the range of principal values. Since
+
+
+x
+arccos( x ) = 90o − arctan 
+.
+2 
+ sqrt(1 − x ) 
+for principal values, the desired expression for H is derived.
+Derivation of the inverse transform proceeds using Fig. 5:
+In the RG sector, we have seen that S = 1 − b′ . Thus
+b = wB (1 − S ) .
+Similarly, in the GB and BR sectors, r and g are given as stated in the algorithm
+above.
+To determine another of the remaining two primaries in each sector, notice
+that for P in the RG sector,
+r WQR cos( A0 ) + WP cos( A0 + H )
+=
+1
+PR QR cos( A0 )
+r = wR + k 0 WP cos( A0 + H ) ,7
+where k 0 = 1 ( PR QR cos( A0 )) . The only unknown on the right is WP which is
+computed as follows:
+WP cos( B0 − H )
+S=
+,
+WRB
+where B0 = A(PR WRB ) . Hence
+r=
+
+wR + wB S cos( A0 + H )
+,
+cos(60o − ( A0 + H ))
+
+since A0 + B0 = 60o and
+k0
+w
+= B = wB .
+WRB
+1
+Similarly, g and b can be derived to be as in the algorithm statement for the GB
+and BR sectors, respectively.
+Finally, since r + g + b = 1 , the remaining primary in each sector is easily obtained.
+
+Conclusions
+
+The transform pair derived from the hexcone model (RGB to HSV) require
+no trigonometric or other expensive functions. Hence they are quite fast, a fact of
+considerable importance when they are to be performed at the pixel level in a
+frame buffer. For example, in the RGB paint program at NYIT there is a type of
+7[
+
+A0 − H in the original]
+
+Color Gamut Transform Pairs
+
+12
+
+painting called tint paint. Here the user selects a color to paint with. Its tint (H
+and S) is extracted by use of the RGB to HSV transform. Now painting in a frame
+buffer can be thought of as overwriting a small 2-dimensional subset of a large 2dimensional array, the frame buffer, where the position of the overwriting is controlled by the user with a tablet and stylus. A small 2-dimensional array called
+the brush governs this overwriting like a bit mask: Where there is a 0 in the brush,
+no overwriting occurs, but where it is non-0, the color selected by the user is
+written into the frame buffer. Tint painting is the following variation on simple
+painting: At a point (pixel) about to be written in the frame buffer, an RGB to
+HSV transform is performed to extract the value V there. A new color is formed
+from the tint the user selected and V of the pixel. An application of the HSV to
+RGB transform converts the color to usable form, and then it is written into the
+pixel. If the transforms are slow, the user can “feel” it by sluggish response of his
+brush.
+The triangle model transforms (RGB to HSL) are too slow to be used in software form in interactive situations such as painting because of the function calls
+to sqrt(), arctan(), and cos(). It is probable, however, that approximations to these
+functions (eg, linear interpolation between values in a lookup table for cos())
+would lead to speedier response, especially if implemented in microcode.
+An important use of the triangle model is for manipulation of the NTSC
+space. As indicated in Fig. 4, modern monitors depart somewhat from the 1953
+NTSC recommendations. The generality of the triangle model makes it a simple
+matter to obtain the RGB to HSL transform pair for the slightly different weights
+which describe a particular modern monitor [2]. A simple recalculation of constants suffices.
+
+Acknowledgement
+
+To Dick Shoup of Xerox PARC whose encouragement, sponsorship, and
+technical assistance made this research possible and whose “magic dream machine” inspired it. Also to David DiFrancesco for the color photographs, Ephraim
+Cohen for trigonometric assistance, Larry Masinter for improved notation.
+
+References
+[1] Faber Birren, Creative Color, Van Nostrand Reinhold, New York, 1961, 12.
+[2] Deane B Judd and Gunter Wyszecki, Color in Business, Science, and Industry, (3rd Edition), John Wiley & Sons, New Work, 1975.
+[3] Proceedings of the IRE, 42 (Jan 1954), special NTSC issue.
+[4] Jay M Tenenbaum, Thomas D Garvey, Stephen Wyl, Helen C Wolf, and
+David Nitzan, An interactive facility for scene analysis research, Technical Note
+87, SRI Project 1187, Stanford Research Institute, Menlo Park, CA, (Jan 1974),
+34-39.
+
+Color Gamut Transform Pairs
+
+13
+B
+
+(0,0,1)
+
+(0,1,0)
+(1,0,0)
+
+G
+
+R
+
+Fig. 1. RGB colorcube and subcube.
+
+B
+
+M
+
+C
+
+W
+
+E
+
+A
+
+R
+H=0
+
+G
+
+P
+F
+
+D
+P'
+Y
+
+Fig. 2. A vector in a hexagonal disk.
+
+Color Gamut Transform Pairs
+
+14
+
+b
+P B (0,0,1)
+
+W=(w R,w G,w B)
+Q
+P
+
+(0,1,0)
+g
+PG
+
+T
+P'
+PR
+r
+
+(1,0,0)
+
+Fig. 3. Normalized color triangle.
+
+Fig. 4. 1931 chromaticity diagram showing 1953 NTSC recommended gamut
+(solid triangle) and a modern gamut (dashed).
+
+Color Gamut Transform Pairs
+
+15
+
+PB
+
+RG
+QG
+RR
+W
+
+QR
+
+P
+PR
+
+P'
+
+RB QB
+
+PG
+
+Fig. 5. Computing H in the triangle model.
+
+Plate 1. RGB colorcube in IQY space (see original paper for corresponding
+color plate).
+
+Color Gamut Transform Pairs
+
+16
+
+Plate 2. Color mixture terms.
+
+Plate 3. Loci of constant S (see original paper for corresponding color plate).
+
+Color Gamut Transform Pairs
+
+Plate 4. Color bar interpretation of HSV.
+
+Plate 5. V = 1/3 plane in triangle model.
+
+17
+
+
