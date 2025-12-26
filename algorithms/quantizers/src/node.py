@@ -82,7 +82,7 @@ def process_image(image_path, output_path, n=3):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ARMLite node-based color quantizer')
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
+    parser.add_argument('output', nargs='?', help='Output assembly file path (default: converted.s)')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):
@@ -99,5 +99,18 @@ if __name__ == '__main__':
             break
         except ValueError:
             print("Invalid input. Please enter an integer.")
+
+    output_path = args.output
+    if output_path:
+        os.path.expanduser(output_path)
+        if os.path.isdir(output_path):
+            os.path.join(output_path, 'converted.s')
+        else:
+            parent = os.path.dirname(output_path)
+            if parent and not os.path.exists(parent):
+                print(f'Output path does not exist: {parent}')
+                sys.exit(1)
+    else:
+        output_path = 'converted.s'
 
     process_image(args.image, args.output, n=n_input)

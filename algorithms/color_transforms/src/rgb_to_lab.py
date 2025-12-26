@@ -115,7 +115,7 @@ if __name__ == '__main__':
         description='RGB→Lab workflow renderer for ARMLite sprites'
     )
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
+    parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
     parser.add_argument('--weights', default='1,1,1', help='Comma-separated weights for L,a,b channels (default: 1,1,1)')
     args = parser.parse_args()
 
@@ -132,4 +132,17 @@ if __name__ == '__main__':
         print('Weights must contain exactly three values.')
         sys.exit(1)
 
-    process_image(args.image, args.output, weights)
+    output_path = args.output
+    if output_path:
+        output_path = os.path.expanduser(output_path)
+        if os.path.isdir(output_path):
+            output_path = os.path.join(output_path, 'converted.s')
+        else:
+            parent = os.path.dirname(output_path)
+            if parent and not os.path.exists(parent):
+                print(f'Output directory does not exist: {parent}')
+                sys.exit(1)
+    else:
+        output_path = 'converted.s'
+    
+    process_image(args.image, output_path, weights)

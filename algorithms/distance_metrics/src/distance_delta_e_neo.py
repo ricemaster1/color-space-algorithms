@@ -136,7 +136,6 @@ def apply_distance_delta_e_neo(
         grid.append(row)
     return grid
 
-
 def generate_assembly(color_grid, output_path):
     height = len(color_grid)
     width = len(color_grid[0]) if height else 0
@@ -184,6 +183,7 @@ def process_image(
     luminance_threshold: float,
     hybrid_weights: Tuple[float, float, float],
 ) -> None:
+    
     img = Image.open(image_path).convert('RGB')
     img = img.resize((128, 96))
     grid = apply_distance_delta_e_neo(
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         description='Neo Delta E renderer for ARMLite sprites'
     )
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
+    parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
     parser.add_argument(
         '-m', '--metric',
         default='adaptive',
@@ -210,25 +210,25 @@ if __name__ == '__main__':
         help='Delta E metric selection (default: adaptive)'
     )
     parser.add_argument(
-        '--cie94-application',
+        '-ca', '--cie94-application',
         default='graphic_arts',
         choices=['graphic_arts', 'textiles'],
         help='Application weighting for CIE94-based calculations'
     )
     parser.add_argument(
-        '--chroma-threshold',
+        '-ct', '--chroma-threshold',
         type=float,
         default=10.0,
         help='Chroma threshold for adaptive blending (default: 10.0)'
     )
     parser.add_argument(
-        '--luminance-threshold',
+        '-lt', '--luminance-threshold',
         type=float,
         default=12.0,
         help='Luminance gap threshold for adaptive blending (default: 12.0)'
     )
     parser.add_argument(
-        '--hybrid-weights',
+        '-hw', '--hybrid-weights',
         type=_parse_weights,
         default=(0.6, 0.3, 0.1),
         help='Comma-separated weights for (CIEDE2000,CIE94,CIE76) when using hybrid metrics'
@@ -238,6 +238,19 @@ if __name__ == '__main__':
     if not os.path.isfile(args.image):
         print('Image not found.')
         sys.exit(1)
+
+    output_path = args.output
+    if output_path:
+        output_path = os.path.expanduser(output_path)
+        if os.path.isdir(output_path):
+            output_path = os.path.join(output_path, 'converted.s')
+        else:
+            parent = os.path.dirname(output_path)
+            if parent and not os.path.exists(parent):
+                print(f'Output directory does not exist: {parent}')
+                sys.exit(1)
+    else:
+        output_path = 'converted.s'
 
     process_image(
         args.image,

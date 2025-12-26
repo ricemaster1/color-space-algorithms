@@ -106,7 +106,7 @@ if __name__ == '__main__':
         description='RGB→HSV/HSL workflow renderer for ARMLite sprites'
     )
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
+    parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
     parser.add_argument('-s','--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
     parser.add_argument('-w', '--weights', default='1,1,1', help='Comma-separated weights for hue,sat,value/lightness matching (default: 1,1,1)')
     args = parser.parse_args()
@@ -124,4 +124,19 @@ if __name__ == '__main__':
         print('Weights must contain exactly three values.')
         sys.exit(1)
 
-    process_image(args.image, args.output, args.space, weights)
+    # If output is a directory, save as converted.s inside it
+    output_path = args.output
+    if output_path:
+        output_path = os.path.expanduser(output_path)
+        if os.path.isdir(output_path):
+            output_path = os.path.join(output_path, 'converted.s')
+        else:
+            # If parent directory doesn't exist, error out
+            parent = os.path.dirname(output_path)
+            if parent and not os.path.exists(parent):
+                print(f'Output directory does not exist: {parent}')
+                sys.exit(1)
+    else:
+        output_path = 'converted.s'
+    
+    process_image(args.image, output_path, args.space, weights)

@@ -177,12 +177,25 @@ if __name__ == '__main__':
         description='Mahalanobis distance renderer for ARMLite sprites'
     )
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
-    parser.add_argument('--epsilon', type=float, default=1e-3, help='Diagonal regularization term added to covariance (default: 1e-3)')
+    parser.add_argument('output', nargs='?' help='Output assembly file path (default: converted.s)')
+    parser.add_argument('-e', '--epsilon', type=float, default=1e-3, help='Diagonal regularization term added to covariance (default: 1e-3)')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):
         print('Image not found.')
         sys.exit(1)
+    
+    output_path = args.output
+    if output_path:
+        output_path = os.path.expanduser(output_path)
+        if os.path.isdir(output_path):
+            output_path = os.path.join(output_path, 'converted.s')
+        else:
+            parent = os.path.dirname(output_path)
+            if parent and not os.path.exists(parent):
+                print(f'Output path does not exist: {parent}')
+                sys.exit(1)
+    else:
+        output_path = 'converted.s'
 
     process_image(args.image, args.output, args.epsilon)

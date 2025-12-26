@@ -1,6 +1,8 @@
 # `rgb_to_hsv_hsl.py` 
 # Deep Dive
 
+> **Note:** This document uses LaTeX math notation (matrices, piecewise functions, etc.) that GitHub's Markdown renderer may not display correctly. For the best reading experience, use VS Code with the Markdown Preview Enhanced extension, Typora, or another full-featured Markdown viewer.
+
 The `algorithms/color_transforms/src/rgb_to_hsv_hsl.py` module converts arbitrary imagery into ARMLite-compatible sprites by matching pixels in HSV or HSL space before emitting `.Resolution`, `.PixelScreen`, and per-pixel stores. This document narrates the color theory behind the script, explains every function, and provides research references plus assets you can reuse in blog posts or release notes.
 
 ---
@@ -129,16 +131,16 @@ $$
 
 $$
 \begin{aligned}
-V &= C_{\max},\\[4pt]
+V &= C_{\max},\\
 S &= \begin{cases}
 0 & \text{if } C_{\max} = 0,\\
 \dfrac{\Delta}{C_{\max}} & \text{otherwise},
-\end{cases}\\[10pt]
+\end{cases}\\
 H &= \begin{cases}
 0 & \text{if } \Delta = 0,\\
 60^\circ \bmod 360^\circ \times \begin{cases}
-\dfrac{g-b}{\Delta} & C_{\max} = r,\\[6pt]
-2 + \dfrac{b-r}{\Delta} & C_{\max} = g,\\[6pt]
+\dfrac{g-b}{\Delta} & C_{\max} = r,\\
+2 + \dfrac{b-r}{\Delta} & C_{\max} = g,\\
 4 + \dfrac{r-g}{\Delta} & C_{\max} = b.
 \end{cases}
 \end{cases}
@@ -149,7 +151,7 @@ $$
 
 $$
 \begin{aligned}
-L &= \frac{C_{\max} + C_{\min}}{2},\\[4pt]
+L &= \frac{C_{\max} + C_{\min}}{2},\\
 S &= \begin{cases}
 0 & \text{if } \Delta = 0,\\
 \dfrac{\Delta}{1 - |2L - 1|} & \text{otherwise},
@@ -186,27 +188,27 @@ To reverse the process—going from a hue angle back to its pure RGB color on th
 
 $$
 r = \begin{cases}
-1 & \text{if } h \le \tfrac{1}{6} \text{ or } h > \tfrac{5}{6} \\[4pt]
-2 - 6h & \text{if } \tfrac{1}{6} \le h \le \tfrac{2}{6} \\[4pt]
-0 & \text{if } \tfrac{2}{6} \le h \le \tfrac{4}{6} \\[4pt]
+1 & \text{if } h \le \tfrac{1}{6} \text{ or } h > \tfrac{5}{6} \\
+2 - 6h & \text{if } \tfrac{1}{6} \le h \le \tfrac{2}{6} \\
+0 & \text{if } \tfrac{2}{6} \le h \le \tfrac{4}{6} \\
 6h - 4 & \text{if } \tfrac{4}{6} \le h \le \tfrac{5}{6}
 \end{cases}
 $$
 
 $$
 g = \begin{cases}
-6h & \text{if } 0 \le h \le \tfrac{1}{6} \\[4pt]
-1 & \text{if } \tfrac{1}{6} \le h \le \tfrac{3}{6} \\[4pt]
-4 - 6h & \text{if } \tfrac{3}{6} \le h \le \tfrac{4}{6} \\[4pt]
+6h & \text{if } 0 \le h \le \tfrac{1}{6} \\
+1 & \text{if } \tfrac{1}{6} \le h \le \tfrac{3}{6} \\
+4 - 6h & \text{if } \tfrac{3}{6} \le h \le \tfrac{4}{6} \\
 0 & \text{if } \tfrac{4}{6} \le h < 1
 \end{cases}
 $$
 
 $$
 b = \begin{cases}
-0 & \text{if } 0 \le h \le \tfrac{2}{6} \\[4pt]
-6h - 2 & \text{if } \tfrac{2}{6} \le h \le \tfrac{3}{6} \\[4pt]
-1 & \text{if } \tfrac{3}{6} \le h \le \tfrac{5}{6} \\[4pt]
+0 & \text{if } 0 \le h \le \tfrac{2}{6} \\
+6h - 2 & \text{if } \tfrac{2}{6} \le h \le \tfrac{3}{6} \\
+1 & \text{if } \tfrac{3}{6} \le h \le \tfrac{5}{6} \\
 6 - 6h & \text{if } \tfrac{5}{6} \le h < 1
 \end{cases}
 $$
@@ -229,7 +231,7 @@ To produce colors at arbitrary intensity and saturation levels—not just the fu
 
 $$
 [r \; g \; b] = \begin{cases}
-\bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] + c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) \cdot 2i & \text{if } i \le \tfrac{1}{2} \\[8pt]
+\bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] + c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) \cdot 2i & \text{if } i \le \tfrac{1}{2} \\
 \bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] + c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) + \bigl([\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}] - c([r' \; g' \; b'] - [\tfrac{1}{2} \; \tfrac{1}{2} \; \tfrac{1}{2}])\bigr) \cdot (2 - 2i) & \text{if } i \ge \tfrac{1}{2}
 \end{cases}
 $$

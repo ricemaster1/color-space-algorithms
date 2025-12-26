@@ -90,7 +90,7 @@ if __name__ == '__main__':
         description='Delta E renderer for ARMLite sprites'
     )
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('-o', '--output', default='converted.s', help='Output assembly file path')
+    parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path')
     parser.add_argument(
         '-m', '--metric',
         default='ciede2000',
@@ -109,4 +109,17 @@ if __name__ == '__main__':
         print('Image not found.')
         sys.exit(1)
 
-    process_image(args.image, args.output, args.metric, args.cie94_application)
+    output_path = args.output
+    if output_path:
+        output_path = os.path.expanduser(output_path)
+        if os.path.isdir(output_path):
+            output_path = os.path.join(output_path, 'converted.s')
+        else:
+            parent = os.path.dirname(output_path)
+            if parent and not os.path.exists(parent):
+                print(f'Output directory does not exist: {parent}')
+                sys.exit(1)
+    else:
+        output_path = 'converted.s'
+
+    process_image(args.image, output_path, args.metric, args.cie94_application)
