@@ -23,7 +23,7 @@ Color accuracy on ARMLite depends on how you measure differences between RGB tri
 ---
 
 ## Quantizers
-Every quantizer shares the same core CLI (`image` plus optional `-o/--output`) and emits a ready-to-run sprite. Rather than maintain per-script tables here, jump to `docs/quantizers.md` for expanded coverage, including knob breakdowns, strengths, and recommended pairings.
+Every quantizer shares the same core CLI (`image` and `output`) and emits a ready-to-run sprite. Rather than maintain per-script tables here, jump to `docs/quantizers.md` for expanded coverage, including knob breakdowns, strengths, and recommended pairings.
 
 Cheat sheet:
 - **Baseline mappers** (`quantizer.py`, `kd_tree_palette.py`, `node.py`, `nthree.py`) provide quick palette-aligned exports.
@@ -34,7 +34,7 @@ Cheat sheet:
 All quantizers resize inputs to 128×96 unless you override the constants noted in the docs. For usage examples, parameter matrices, and pipeline recipes (for example `lab → k_means → stucki`), see `docs/quantizers.md`.
 
 ## Dithers
-Each diffusion script sticks to the same ergonomic CLI (`image`, optional `-o/--output`, plus `--variant` for Sierra). `docs/dithers.md` now hosts the weight diagrams, stride visualizations, and tuning charts so this README stays high level.
+Each diffusion script sticks to the same ergonomic CLI (`image`, `output`, `--variant` for Sierra).
 
 - **High fidelity**: `jarvis_judice_ninke.py`, `stucki.py`, and `sierra.py` (Sierra3/2/Lite) retain gradients with minimal artifacts.
 - **Classic**: `floyd-steinberg.py` delivers the expected checkerboard texture.
@@ -52,7 +52,7 @@ Use these modules as standalone inspectors or import them directly inside quanti
 Pick textile vs graphic arts constants, hybrid weights, and epsilon stabilizers using the tables in the docs page.
 
 ## Color Transforms
-Each helper exposes the same ergonomics (`image`, optional `-o/--output`, and comma-separated weighting). Full conversion notes and weighting recipes now sit in `docs/color-transforms.md` so the README only needs the quick index below:
+Each helper exposes the same ergonomics (`image`, `output`, and comma-separated weighting). Full conversion notes and weighting recipes now sit in `docs/color-transforms.md` so the README only needs the quick index below:
 
 - `rgb_to_lab.py` – reweight luminance vs chroma ahead of Delta E comparisons.
 - `rgb_to_hsv_hsl.py` – preserve hue angles when doing cel shading or node-based quantization.
