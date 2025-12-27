@@ -108,21 +108,27 @@ if __name__ == '__main__':
     parser.add_argument('image', help='Path to input image')
     parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
     parser.add_argument('-s','--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
-    parser.add_argument('-w', '--weights', default='1,1,1', help='Comma-separated weights for hue,sat,value/lightness matching (default: 1,1,1)')
+    parser.add_argument('-w', '--weights', default=None, type=str, metavar='W1,W2,W3',
+        help='Comma-separated weights for hue,sat,value/lightness matching. For HSV, recommended default is 2.7,2.2,8 and for HSL it is 0.42,0.8,1.5. Negative values are allowed. Setting all weights to 0,0,0 will produce a solid color.')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):
         print('Image not found.')
         sys.exit(1)
 
-    try:
-        weights = tuple(float(w.strip()) for w in args.weights.split(','))
-    except ValueError:
-        print('Invalid weights. Use comma-separated numbers, e.g. 1,1,0.5')
-        sys.exit(1)
-    if len(weights) != 3:
-        print('Weights must contain exactly three values.')
-        sys.exit(1)
+    # Determine weights, allowing negative values and proper defaults for HSL
+    weights = None
+    if args.weights is not None:
+        try:
+            weights = tuple(float(w.strip()) for w in args.weights.split(','))
+        except Exception:
+            print('Invalid weights. Use comma-separated numbers, e.g. 1,1,0.5 or -1,1,1')
+            sys.exit(1)
+        if len(weights) != 3:
+            print('Weights must contain exactly three values.')
+            sys.exit(1)
+    if weights is None:
+        weights = (2.7, 2.2, 8.0) if args.space == 'hsv' else (0.42, 0.8, 1.5)
 
     # If output is a directory, save as converted.s inside it
     output_path = args.output
