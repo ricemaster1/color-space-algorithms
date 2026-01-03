@@ -422,7 +422,7 @@ class ARMliteStyleApp:
         
         # Create weight sliders
         self.slider_vars = []
-        self.slider_labels = []
+        self.slider_entries = []
         slider_names = ['H (Hue)', 'S (Saturation)', 'V/L (Value/Lightness)']
         
         for i, name in enumerate(slider_names):
@@ -456,17 +456,26 @@ class ARMliteStyleApp:
             )
             slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
             
-            # Value label
-            value_label = tk.Label(
+            # Editable entry for weight value
+            entry_var = tk.StringVar(value=f"{self.weights[i]:.2f}")
+            entry = tk.Entry(
                 row,
-                text=f"{self.weights[i]:.2f}",
-                bg=COLORS['bg_panel'],
+                textvariable=entry_var,
+                bg=COLORS['bg_section'],
                 fg=COLORS['accent2'],
-                width=6,
-                font=('Consolas', 10)
+                insertbackground=COLORS['accent'],
+                width=7,
+                font=('Consolas', 10),
+                justify='center',
+                relief='flat',
+                highlightthickness=1,
+                highlightbackground=COLORS['border'],
+                highlightcolor=COLORS['accent']
             )
-            value_label.pack(side=tk.LEFT)
-            self.slider_labels.append(value_label)
+            entry.pack(side=tk.LEFT)
+            entry.bind('<Return>', lambda e, idx=i: self._on_entry_change(idx))
+            entry.bind('<FocusOut>', lambda e, idx=i: self._on_entry_change(idx))
+            self.slider_entries.append(entry_var)
         
         # Pixel mode selector
         mode_frame = tk.Frame(controls_content, bg=COLORS['bg_panel'])
@@ -625,10 +634,10 @@ class ARMliteStyleApp:
             else:
                 self.weights = list(HSL_DEFAULTS)
             
-            # Update sliders
+            # Update sliders and entries
             for i, var in enumerate(self.slider_vars):
                 var.set(self.weights[i])
-                self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
+                self.slider_entries[i].set(f"{self.weights[i]:.2f}")
             
             self._log(f"Switched to {new_space.upper()} color space")
             self._update_weight_display()
@@ -638,9 +647,23 @@ class ARMliteStyleApp:
         """Handle slider value change."""
         value = self.slider_vars[index].get()
         self.weights[index] = value
-        self.slider_labels[index].config(text=f"{value:.2f}")
+        self.slider_entries[index].set(f"{value:.2f}")
         self._update_weight_display()
         self._schedule_update()
+    
+    def _on_entry_change(self, index: int):
+        """Handle manual entry of weight value."""
+        try:
+            value = float(self.slider_entries[index].get())
+            value = max(0.0, min(10.0, value))  # Clamp to slider range
+            self.weights[index] = value
+            self.slider_vars[index].set(value)
+            self.slider_entries[index].set(f"{value:.2f}")
+            self._update_weight_display()
+            self._schedule_update()
+        except ValueError:
+            # Revert to current weight if invalid
+            self.slider_entries[index].set(f"{self.weights[index]:.2f}")
     
     def _update_weight_display(self):
         """Update the weight display label."""
@@ -737,7 +760,7 @@ class ARMliteStyleApp:
         
         for i, var in enumerate(self.slider_vars):
             var.set(self.weights[i])
-            self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
+            self.slider_entries[i].set(f"{self.weights[i]:.2f}")
         
         self._log(f"Reset to {self.current_space.upper()} defaults: {tuple(self.weights)}")
         self._update_weight_display()
@@ -827,7 +850,7 @@ class ARMliteStyleApp:
         self.weights = best_w
         for i, var in enumerate(self.slider_vars):
             var.set(self.weights[i])
-            self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
+            self.slider_entries[i].set(f"{self.weights[i]:.2f}")
         
         # Report result
         avg_error = math.sqrt(best_error / len(orig_rgb))
@@ -876,7 +899,7 @@ class ARMliteStyleApp:
         self.weights = best_w
         for i, var in enumerate(self.slider_vars):
             var.set(self.weights[i])
-            self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
+            self.slider_entries[i].set(f"{self.weights[i]:.2f}")
         
         self._log(f"Grid search {self.current_space.upper()}: ({self.weights[0]:.2f}, {self.weights[1]:.2f}, {self.weights[2]:.2f})")
         self._update_weight_display()

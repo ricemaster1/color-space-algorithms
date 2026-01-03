@@ -437,14 +437,27 @@ This is a natural consequence of quantization to a limited palette—the continu
 ---
 
 ## Weighting playbook
+
+> **Note:** These are starting-point weights—due to [weight equivalence](#weight-equivalence-in-discrete-palettes), other ratios may produce identical output. Use `--auto` or the GUI to find alternatives optimized for your specific image.
+
+### HSV weights (Hue, Saturation, Value)
+
 | Goal | Weights | Notes |
 | --- | --- | --- |
-| Preserve cel-shaded hue bands | `3,0.8,0.4` | Keeps hue dominant so large flat regions stay in-family even under heavy dithers. |
-| Boost neon UI saturation | `1.2,2.5,0.6` | Saturation bias stops conversion toward gray when brightness is normalized. |
-| Highlight silhouettes | `0.8,0.9,2.0` | Value/lightness bias ensures rim lighting reads correctly before quantization. |
-| Pastel wash | `0.7,0.5,1.8` with `--space hsl` | Lightness emphasis keeps subtle gradients from collapsing to black. |
+| Preserve cel-shaded hue bands | `6.21, 4.75, 6.04` | Hue-dominant; large flat regions stay in-family under dithering. |
+| Boost neon UI saturation | `1.50, 2.81, 10.0` or `2.09, 3.86, 3.27` or `7.83, 0.28, 6.02` | Saturation bias prevents drift toward gray. |
+| Highlight silhouettes | `equal` or `10.00, 4.57, 9.11` | Value bias ensures rim lighting reads correctly. |
+| Specular metal | `0.00, 0.37, 10.00` | Balanced for reflective surfaces with varied highlights. |
 
-Tune weights with fractional steps (e.g., increments of `0.1`). The metric squares and sums them, so doubling a channel roughly doubles its influence.
+### HSL weights (Hue, Saturation, Lightness)
+
+| Goal | Weights | Notes |
+| --- | --- | --- |
+| Pastel wash | `0.7, 0.5, 1.8` | Lightness emphasis keeps subtle gradients from collapsing. |
+| Soft UI cards | `0.6, 0.5, 1.9` | Similar to pastel; preserves light/dark contrast in flat design. |
+| Balanced general | `0.4, 0.8, 1.5` | Good default for diverse images (close to auto-match results). |
+
+Tune weights with fractional steps (e.g., increments of `0.1`). The metric squares and sums them, so doubling a channel roughly quadruples its influence.
 
 ---
 
