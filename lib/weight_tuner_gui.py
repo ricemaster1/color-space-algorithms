@@ -921,7 +921,7 @@ class ARMliteStyleApp:
             self._auto_match_grid()
             return
         
-        self._log("Optimizing weights (fast grid search)...")
+        self._log("Optimizing weights (coarse-to-fine search)...")
         self.root.update()
         
         # Get palette for current color space
@@ -964,52 +964,61 @@ class ARMliteStyleApp:
         n_pixels = len(orig_rgb)
         
         # Pre-compute differences (constant across all weight combos)
-        # Shape: (N_pixels, N_palette)
         dh_raw = np.abs(px_space[:, None, 0] - palette_np[None, :, 0])
         dh2 = np.minimum(dh_raw, 1.0 - dh_raw) ** 2  # Hue wrapping + square
         ds2 = (px_space[:, None, 1] - palette_np[None, :, 1]) ** 2
         dv2 = (px_space[:, None, 2] - palette_np[None, :, 2]) ** 2
         
-        # Build all weight combinations: (W, 3) where W = 9*9*10 = 810
-        h_vals = np.array([0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0], dtype=np.float32)
-        s_vals = np.array([0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0], dtype=np.float32)
-        v_vals = np.array([0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0], dtype=np.float32)
-        
-        wh, ws, wv = np.meshgrid(h_vals, s_vals, v_vals, indexing='ij')
-        weights_all = np.stack([wh.ravel(), ws.ravel(), wv.ravel()], axis=1)  # (810, 3)
-        weights_sq = weights_all ** 2  # (810, 3)
-        n_weights = len(weights_all)
-        
-        # Process in chunks to manage memory
-        # For each chunk of pixels, compute errors for ALL weight combos
-        chunk_size = 2000  # ~230MB per chunk for 810 weights
-        errors_all = np.zeros(n_weights, dtype=np.float64)
-        
-        for start in range(0, n_pixels, chunk_size):
-            end = min(start + chunk_size, n_pixels)
-            chunk_dh2 = dh2[start:end]  # (chunk, 147)
-            chunk_ds2 = ds2[start:end]  # (chunk, 147)
-            chunk_dv2 = dv2[start:end]  # (chunk, 147)
-            chunk_rgb = orig_rgb[start:end]  # (chunk, 3)
+        def evaluate_weights(weights_arr):
+            """Evaluate all weight combinations, return errors array."""
+            weights_sq = weights_arr ** 2
+            n_weights = len(weights_arr)
+            errors = np.zeros(n_weights, dtype=np.float64)
+            chunk_size = 3000
             
-            # Compute weighted distances for ALL weights at once
-            # (W, chunk, 147) = (W,1,1)*(1,chunk,147) + ...
-            dist2 = (weights_sq[:, 0, None, None] * chunk_dh2[None, :, :] +
-                     weights_sq[:, 1, None, None] * chunk_ds2[None, :, :] +
-                     weights_sq[:, 2, None, None] * chunk_dv2[None, :, :])
+            for start in range(0, n_pixels, chunk_size):
+                end = min(start + chunk_size, n_pixels)
+                chunk_dh2 = dh2[start:end]
+                chunk_ds2 = ds2[start:end]
+                chunk_dv2 = dv2[start:end]
+                chunk_rgb = orig_rgb[start:end]
+                
+                dist2 = (weights_sq[:, 0, None, None] * chunk_dh2[None, :, :] +
+                         weights_sq[:, 1, None, None] * chunk_ds2[None, :, :] +
+                         weights_sq[:, 2, None, None] * chunk_dv2[None, :, :])
+                
+                best_idx = np.argmin(dist2, axis=2)
+                matched_rgb = _PALETTE_RGB_NP[best_idx]
+                rgb_diff = chunk_rgb[None, :, :].astype(np.int16) - matched_rgb.astype(np.int16)
+                errors += np.sum(rgb_diff.astype(np.float64) ** 2, axis=(1, 2))
             
-            # Find best palette index for each pixel, for each weight combo
-            best_idx = np.argmin(dist2, axis=2)  # (W, chunk)
-            
-            # Get matched RGB and compute errors
-            matched_rgb = _PALETTE_RGB_NP[best_idx]  # (W, chunk, 3)
-            rgb_diff = chunk_rgb[None, :, :].astype(np.int16) - matched_rgb.astype(np.int16)
-            errors_all += np.sum(rgb_diff.astype(np.float64) ** 2, axis=(1, 2))
+            return errors
         
-        # Find best weight combination
-        best_idx = np.argmin(errors_all)
-        best_w = weights_all[best_idx].tolist()
-        best_error = errors_all[best_idx]
+        # === STAGE 1: Coarse search (125 combos) ===
+        h_coarse = np.array([0.5, 1.5, 2.5, 4.0, 5.0], dtype=np.float32)
+        s_coarse = np.array([0.5, 1.5, 2.5, 4.0, 5.0], dtype=np.float32)
+        v_coarse = np.array([1.0, 2.0, 4.0, 6.0, 10.0], dtype=np.float32)
+        
+        wh, ws, wv = np.meshgrid(h_coarse, s_coarse, v_coarse, indexing='ij')
+        weights_coarse = np.stack([wh.ravel(), ws.ravel(), wv.ravel()], axis=1)
+        
+        errors_coarse = evaluate_weights(weights_coarse)
+        best_coarse_idx = np.argmin(errors_coarse)
+        best_coarse = weights_coarse[best_coarse_idx]
+        
+        # === STAGE 2: Fine search around best (125 combos with tighter spacing) ===
+        # Search ±0.5 around coarse best with 0.25 steps
+        h_fine = np.clip(best_coarse[0] + np.array([-0.5, -0.25, 0, 0.25, 0.5]), 0.1, 10.0).astype(np.float32)
+        s_fine = np.clip(best_coarse[1] + np.array([-0.5, -0.25, 0, 0.25, 0.5]), 0.1, 10.0).astype(np.float32)
+        v_fine = np.clip(best_coarse[2] + np.array([-1.0, -0.5, 0, 0.5, 1.0]), 0.1, 10.0).astype(np.float32)
+        
+        wh, ws, wv = np.meshgrid(h_fine, s_fine, v_fine, indexing='ij')
+        weights_fine = np.stack([wh.ravel(), ws.ravel(), wv.ravel()], axis=1)
+        
+        errors_fine = evaluate_weights(weights_fine)
+        best_fine_idx = np.argmin(errors_fine)
+        best_w = weights_fine[best_fine_idx].tolist()
+        best_error = errors_fine[best_fine_idx]
         
         # Apply optimized weights
         self.weights = best_w
