@@ -426,21 +426,20 @@ def generate_slider_assembly(
     # === Data section ===
     lines.extend([
         '; === Data ===',
-        '.ALIGN 4',
-        'WeightH: .word 0',
-        'WeightS: .word 0',
-        'WeightV: .word 0',
-        'SelectedChannel: .word 0',
+        '        .DATA',
+        'WeightH:    .WORD 0',
+        'WeightS:    .WORD 0',
+        'WeightV:    .WORD 0',
+        'SelectedChannel: .WORD 0',
         '',
-        'WeightsMsg: .asciz "Weights (x100): "',
-        'CommaMsg: .asciz ", "',
-        'NewlineMsg: .asciz "\\n"',
+        'WeightsMsg: .ASCIZ "Weights (x100): "',
+        'CommaMsg:   .ASCIZ ", "',
+        'NewlineMsg: .ASCIZ "\\n"',
         '',
     ])
     
     # Pre-render image data with initial weights
     lines.append('; === Pre-rendered image data ===')
-    lines.append('.ALIGN 4')
     lines.append('ImageData:')
     
     # Compute the best match for each pixel
@@ -450,7 +449,6 @@ def generate_slider_assembly(
         dv = abs(a[2] - b[2])
         return math.sqrt((w[0] * dh) ** 2 + (w[1] * ds) ** 2 + (w[2] * dv) ** 2)
     
-    row_data = []
     for y in range(height):
         for x in range(width):
             rgb = img.getpixel((x, y))
@@ -466,15 +464,8 @@ def generate_slider_assembly(
             
             color_value = ARMLITE_RGB[best_name]
             hex_value = (color_value[0] << 16) | (color_value[1] << 8) | color_value[2]
-            row_data.append(f'0x{hex_value:06x}')
-            
-            # Output 8 values per line for readability
-            if len(row_data) >= 8:
-                lines.append(f'    .word {", ".join(row_data)}')
-                row_data = []
-    
-    if row_data:
-        lines.append(f'    .word {", ".join(row_data)}')
+            # Each .WORD on its own line for ARMLite compatibility
+            lines.append(f'    .WORD 0x{hex_value:06x}')
     
     lines.append('')
     
