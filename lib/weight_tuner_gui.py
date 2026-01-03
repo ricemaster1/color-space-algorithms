@@ -924,71 +924,95 @@ class ARMliteStyleApp:
         self._log("Optimizing weights (fast grid search)...")
         self.root.update()
         
-        # Get transform and palette for current color space
-        transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
-        palette = PALETTE_HSV if self.current_space == 'hsv' else PALETTE_HSL
+        # Get palette for current color space
+        palette_np = _PALETTE_HSV_NP if self.current_space == 'hsv' else _PALETTE_HSL_NP
         
-        # Build numpy arrays for vectorized computation
-        palette_names = list(palette.keys())
-        palette_hsv = np.array([palette[n] for n in palette_names])  # (147, 3)
-        palette_rgb = np.array([ARMLITE_RGB[n] for n in palette_names])  # (147, 3)
+        # Convert image to numpy and transform to color space
+        img_arr = np.array(self.display_image, dtype=np.float32) / 255.0
         
-        # Cache pixel data as numpy arrays
-        orig_rgb_list = []
-        px_space_list = []
-        for y in range(self.img_height):
-            for x in range(self.img_width):
-                px = self.display_image.getpixel((x, y))
-                if isinstance(px, (tuple, list)) and len(px) >= 3:
-                    rgb = (px[0], px[1], px[2])
-                    orig_rgb_list.append(rgb)
-                    px_space_list.append(transform(rgb))
+        # Vectorized RGB to HSV/HSL conversion
+        r, g, b = img_arr[:,:,0], img_arr[:,:,1], img_arr[:,:,2]
+        maxc = np.maximum(np.maximum(r, g), b)
+        minc = np.minimum(np.minimum(r, g), b)
+        delta = maxc - minc
         
-        orig_rgb = np.array(orig_rgb_list)  # (N, 3)
-        px_space = np.array(px_space_list)  # (N, 3)
+        # Hue calculation
+        hue = np.zeros_like(maxc)
+        mask_r = (maxc == r) & (delta != 0)
+        mask_g = (maxc == g) & (delta != 0)
+        mask_b = (maxc == b) & (delta != 0)
+        hue[mask_r] = ((g[mask_r] - b[mask_r]) / delta[mask_r]) % 6
+        hue[mask_g] = (b[mask_g] - r[mask_g]) / delta[mask_g] + 2
+        hue[mask_b] = (r[mask_b] - g[mask_b]) / delta[mask_b] + 4
+        hue = hue / 6.0
+        hue[hue < 0] += 1.0
         
-        def compute_error(weights):
-            """Compute total RGB error for given weights (vectorized)."""
-            w = np.array(weights)
-            
-            # Compute weighted distance from each pixel to each palette color
-            # Handle hue wrapping
-            dh = np.abs(px_space[:, None, 0] - palette_hsv[None, :, 0])
-            dh = np.minimum(dh, 1.0 - dh)  # Hue wrapping
-            ds = np.abs(px_space[:, None, 1] - palette_hsv[None, :, 1])
-            dv = np.abs(px_space[:, None, 2] - palette_hsv[None, :, 2])
-            
-            # Weighted distance: (N, 147)
-            dist = np.sqrt((w[0] * dh)**2 + (w[1] * ds)**2 + (w[2] * dv)**2)
-            
-            # Find best match for each pixel
-            best_idx = np.argmin(dist, axis=1)  # (N,)
-            matched_rgb = palette_rgb[best_idx]  # (N, 3)
-            
-            # Compute RGB error
-            rgb_diff = orig_rgb - matched_rgb
-            total_error = np.sum(rgb_diff ** 2)
-            return total_error
+        if self.current_space == 'hsv':
+            sat = np.where(maxc != 0, delta / maxc, 0)
+            val = maxc
+            px_space = np.stack([hue, sat, val], axis=-1).reshape(-1, 3)  # (N, 3)
+        else:
+            light = (maxc + minc) / 2.0
+            sat = np.zeros_like(light)
+            mask = delta != 0
+            sat[mask & (light <= 0.5)] = delta[mask & (light <= 0.5)] / (maxc[mask & (light <= 0.5)] + minc[mask & (light <= 0.5)])
+            sat[mask & (light > 0.5)] = delta[mask & (light > 0.5)] / (2.0 - maxc[mask & (light > 0.5)] - minc[mask & (light > 0.5)])
+            px_space = np.stack([hue, sat, light], axis=-1).reshape(-1, 3)  # (N, 3)
         
-        # Grid search over weight space
-        # Use finer grid for better results
-        h_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
-        s_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
-        v_vals = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+        # Original RGB for error calculation
+        orig_rgb = (img_arr * 255).reshape(-1, 3)  # (N, 3)
         
-        # Start from space-appropriate defaults (not current slider values)
-        # This ensures consistent results regardless of slider state
-        default_w = HSV_DEFAULTS if self.current_space == 'hsv' else HSL_DEFAULTS
-        best_w = list(default_w)
-        best_error = compute_error(best_w)
+        # Pre-compute differences (these are constant across all weight combos)
+        # Shape: (N_pixels, N_palette)
+        dh_raw = np.abs(px_space[:, None, 0] - palette_np[None, :, 0])
+        dh = np.minimum(dh_raw, 1.0 - dh_raw)  # Hue wrapping
+        ds = np.abs(px_space[:, None, 1] - palette_np[None, :, 1])
+        dv = np.abs(px_space[:, None, 2] - palette_np[None, :, 2])
         
-        for h in h_vals:
-            for s in s_vals:
-                for v in v_vals:
-                    err = compute_error([h, s, v])
-                    if err < best_error:
-                        best_error = err
-                        best_w = [h, s, v]
+        # Square differences once (avoids repeated squaring in loop)
+        dh2 = dh ** 2
+        ds2 = ds ** 2
+        dv2 = dv ** 2
+        
+        # Grid of weights to search
+        h_vals = np.array([0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0])
+        s_vals = np.array([0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0])
+        v_vals = np.array([0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0])
+        
+        # Fully vectorized grid search
+        best_error = float('inf')
+        best_w = list(HSV_DEFAULTS if self.current_space == 'hsv' else HSL_DEFAULTS)
+        
+        # Process in batches for memory efficiency while staying fast
+        for wh in h_vals:
+            for ws in s_vals:
+                # Vectorize over v_vals (10 at once)
+                # dist shape: (N_pixels, N_palette) for each v
+                # We compute all v values at once
+                wh2, ws2 = wh ** 2, ws ** 2
+                wv2_arr = v_vals ** 2  # (10,)
+                
+                # Compute weighted distances for all v values
+                # Shape manipulation: add v dimension
+                # dh2, ds2, dv2 are (N, 147)
+                # Result: (10, N, 147) distance matrix for all v values
+                dist2 = wh2 * dh2[None, :, :] + ws2 * ds2[None, :, :] + wv2_arr[:, None, None] * dv2[None, :, :]
+                
+                # Find best palette index for each pixel, for each v
+                best_idx = np.argmin(dist2, axis=2)  # (10, N)
+                
+                # Get matched RGB values: (10, N, 3)
+                matched_rgb = _PALETTE_RGB_NP[best_idx]
+                
+                # Compute errors for all v values: (10,)
+                rgb_diff = orig_rgb[None, :, :] - matched_rgb  # (10, N, 3)
+                errors = np.sum(rgb_diff ** 2, axis=(1, 2))  # (10,)
+                
+                # Find best v for this h, s combination
+                best_v_idx = np.argmin(errors)
+                if errors[best_v_idx] < best_error:
+                    best_error = errors[best_v_idx]
+                    best_w = [float(wh), float(ws), float(v_vals[best_v_idx])]
         
         # Apply optimized weights
         self.weights = best_w
