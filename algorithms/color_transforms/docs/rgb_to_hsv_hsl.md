@@ -407,10 +407,32 @@ python weight_tuner_gui.py
 | `R` | Reset weights to defaults |
 | `1`–`4` | Switch pixel mode |
 
+![Weight Tuner GUI - HSL mode](img/weight_tuner-hsl.png)
+<small>Figure 3: The Weight Tuner GUI showing HSL color space with real-time preview.</small>
+
 The GUI is especially useful for:
 - Finding optimal weights for a specific image before batch processing
 - Understanding how different weight combinations affect the output
 - Quick iteration on color matching without command-line cycles
+
+### Weight equivalence in discrete palettes
+
+An important discovery: **multiple weight combinations can produce identical pixel output**. Because ARMlite's palette contains only 147 discrete colors, different weights that cross the same decision boundaries will map pixels to the same palette entries.
+
+For example, these HSL weights produce visually identical results:
+- `(4.0, 2.5, 10.0)`
+- `(2.5, 1.5, 6.0)`
+
+![Weight equivalence demonstration](img/weight_tuner-hsl-fig.2.png)
+<small>Figure 4: Different weight ratios can produce identical quantized output due to the discrete nature of the 147-color palette.</small>
+
+This occurs because the weighted distance metric only determines which palette color is *closest*—once a pixel crosses the decision boundary to a particular palette entry, the exact weight values no longer matter. This has practical implications:
+
+1. **Auto-match may find different "optimal" weights** depending on starting conditions, but they can produce the same output
+2. **Simpler weight ratios** (like `2.5,1.5,6.0`) may be preferable to complex ones (like `4.0,2.5,10.0`) for reproducibility
+3. **The discrete palette creates equivalence classes** of weights that all map to the same pixel grid
+
+This is a natural consequence of quantization to a limited palette—the continuous weight space collapses into discrete output states.
 
 ---
 
