@@ -32,6 +32,12 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageTk
 
+try:
+    from scipy.optimize import minimize
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+
 # Ensure lib is importable
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
@@ -360,7 +366,23 @@ class ARMliteStyleApp:
             padx=15,
             pady=3
         )
-        reset_btn.pack(side=tk.LEFT, padx=(0, 20))
+        reset_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Match button (auto-optimize weights)
+        match_btn = tk.Button(
+            button_frame,
+            text="Match",
+            command=self._auto_match,
+            bg=COLORS['accent2'],
+            fg=COLORS['text'],
+            activebackground=COLORS['button_hover'],
+            activeforeground=COLORS['text'],
+            relief=tk.RAISED,
+            bd=1,
+            padx=15,
+            pady=3
+        )
+        match_btn.pack(side=tk.LEFT, padx=(0, 20))
         
         # Color space toggle
         self.space_var = tk.StringVar(value='hsv')
@@ -726,6 +748,113 @@ class ARMliteStyleApp:
             self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
         
         self._log(f"Reset to {self.current_space.upper()} defaults: {tuple(self.weights)}")
+        self._update_weight_display()
+        self._schedule_update()
+    
+    def _auto_match(self):
+        """Auto-optimize weights to best match original image colors."""
+        if self.display_image is None:
+            messagebox.showwarning("No Image", "Load an image first")
+            return
+        
+        if not HAS_SCIPY:
+            self._log("scipy not installed - using grid search")
+            self._auto_match_grid()
+            return
+        
+        self._log("Optimizing weights...")
+        self.root.update()
+        
+        # Get palette in current color space
+        transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
+        palette = PALETTE_HSV if self.current_space == 'hsv' else PALETTE_HSL
+        
+        # Cache pixel data for speed
+        pixels = []
+        for y in range(self.img_height):
+            for x in range(self.img_width):
+                px = self.display_image.getpixel((x, y))
+                if isinstance(px, (tuple, list)) and len(px) >= 3:
+                    rgb = (px[0], px[1], px[2])
+                    pixels.append(transform(rgb))
+        
+        def objective(w):
+            """Total color distance for given weights."""
+            total = 0.0
+            weights = (w[0], w[1], w[2])
+            for px_space in pixels:
+                best_dist = float('inf')
+                for name, pal_space in palette.items():
+                    d = weighted_distance(px_space, pal_space, weights)
+                    if d < best_dist:
+                        best_dist = d
+                total += best_dist
+            return total
+        
+        # Start from current weights
+        x0 = self.weights[:]
+        
+        # Optimize with bounds [0.1, 10]
+        result = minimize(
+            objective,
+            x0,
+            method='L-BFGS-B',
+            bounds=[(0.1, 10.0), (0.1, 10.0), (0.1, 10.0)]
+        )
+        
+        # Apply optimized weights
+        self.weights = list(result.x)
+        for i, var in enumerate(self.slider_vars):
+            var.set(self.weights[i])
+            self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
+        
+        self._log(f"Optimized {self.current_space.upper()}: ({self.weights[0]:.2f}, {self.weights[1]:.2f}, {self.weights[2]:.2f})")
+        self._update_weight_display()
+        self._schedule_update()
+    
+    def _auto_match_grid(self):
+        """Grid search fallback when scipy is not available."""
+        transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
+        palette = PALETTE_HSV if self.current_space == 'hsv' else PALETTE_HSL
+        
+        # Cache pixel data
+        pixels = []
+        for y in range(self.img_height):
+            for x in range(self.img_width):
+                px = self.display_image.getpixel((x, y))
+                if isinstance(px, (tuple, list)) and len(px) >= 3:
+                    rgb = (px[0], px[1], px[2])
+                    pixels.append(transform(rgb))
+        
+        def evaluate(w):
+            total = 0.0
+            for px_space in pixels:
+                best_dist = float('inf')
+                for pal_space in palette.values():
+                    d = weighted_distance(px_space, pal_space, w)
+                    if d < best_dist:
+                        best_dist = d
+                total += best_dist
+            return total
+        
+        # Coarse grid search
+        best_w = self.weights[:]
+        best_score = evaluate(tuple(best_w))
+        
+        for h in [0.5, 1.0, 2.0, 3.0, 5.0]:
+            for s in [0.5, 1.0, 2.0, 3.0, 5.0]:
+                for v in [0.5, 1.0, 2.0, 3.0, 5.0, 8.0]:
+                    score = evaluate((h, s, v))
+                    if score < best_score:
+                        best_score = score
+                        best_w = [h, s, v]
+        
+        self.weights = best_w
+        for i, var in enumerate(self.slider_vars):
+            var.set(self.weights[i])
+            self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
+        
+        self._log(f"Grid search {self.current_space.upper()}: ({self.weights[0]:.2f}, {self.weights[1]:.2f}, {self.weights[2]:.2f})")
         self._update_weight_display()
         self._schedule_update()
     
