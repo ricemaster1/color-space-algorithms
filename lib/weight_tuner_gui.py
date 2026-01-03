@@ -552,6 +552,7 @@ class ARMliteStyleApp:
             return
         
         self.pixel_mode = mode
+        self.mode_var.set(mode)  # Sync radio button UI
         w, h = self.img_width, self.img_height
         scale = self.display_scale
         canvas_w, canvas_h = w * scale, h * scale
