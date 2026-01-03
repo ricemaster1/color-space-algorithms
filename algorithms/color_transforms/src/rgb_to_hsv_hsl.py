@@ -3,6 +3,7 @@ from __future__ import annotations
 from PIL import Image
 import argparse
 import colorsys
+from datetime import datetime
 import math
 import os
 import sys
@@ -70,16 +71,22 @@ def apply_rgb_to_hsv_hsl(
     return grid
 
 
-def generate_assembly(color_grid, output_path):
+def generate_assembly(color_grid, output_path, *, image_path: str = '', space: str = '', weights: tuple[float, float, float] = (1.0, 1.0, 1.0)):
     height = len(color_grid)
     width = len(color_grid[0]) if height else 0
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     lines = [
         '; === Fullscreen Sprite ===',
+        f'; Generated: {timestamp}',
+        f'; Source: {os.path.basename(image_path)}' if image_path else '',
+        f'; Color space: {space.upper()} weights=({weights[0]}, {weights[1]}, {weights[2]})' if space else '',
         '    MOV R0, #2',
         '    STR R0, .Resolution',
         '    MOV R1, #.PixelScreen',
         '    MOV R6, #512 ; row stride (128 * 4)'
     ]
+    # Filter out empty comment lines
+    lines = [line for line in lines if line]
     for y in range(height):
         for x in range(width):
             offset = ((y * width) + x) * 4
@@ -98,7 +105,7 @@ def process_image(image_path, output_path, space: str, weights: tuple[float, flo
     img = Image.open(image_path).convert('RGB')
     img = img.resize((128, 96))
     grid = apply_rgb_to_hsv_hsl(img, space=space, weights=weights)
-    generate_assembly(grid, output_path)
+    generate_assembly(grid, output_path, image_path=image_path, space=space, weights=weights)
 
 
 if __name__ == '__main__':
@@ -117,25 +124,28 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Determine weights, allowing negative values and proper defaults for HSL
-    weights = None
+    weights: tuple[float, float, float]
     if args.weights is not None:
         try:
-            weights = tuple(float(w.strip()) for w in args.weights.split(','))
+            weights = tuple(float(w.strip()) for w in args.weights.split(','))  # type: ignore[assignment]
         except Exception:
             print('Invalid weights. Use comma-separated numbers, e.g. 1,1,0.5 or -1,1,1')
             sys.exit(1)
         if len(weights) != 3:
             print('Weights must contain exactly three values.')
             sys.exit(1)
-    if weights is None:
+    else:
         weights = (2.7, 2.2, 8.0) if args.space == 'hsv' else (0.42, 0.8, 1.5)
 
-    # If output is a directory, save as converted.s inside it
+    # Build default filename from color space and weights
+    default_filename = f'{args.space}_{weights[0]}_{weights[1]}_{weights[2]}.s'
+    
+    # If output is a directory, save with weight-based filename inside it
     output_path = args.output
     if output_path:
         output_path = os.path.expanduser(output_path)
         if os.path.isdir(output_path):
-            output_path = os.path.join(output_path, 'converted.s')
+            output_path = os.path.join(output_path, default_filename)
         else:
             # If parent directory doesn't exist, error out
             parent = os.path.dirname(output_path)
@@ -143,6 +153,6 @@ if __name__ == '__main__':
                 print(f'Output directory does not exist: {parent}')
                 sys.exit(1)
     else:
-        output_path = 'converted.s'
+        output_path = default_filename
     
     process_image(args.image, output_path, args.space, weights)
