@@ -38,7 +38,7 @@ _PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from lib.palette import ARMLITE_RGB, ARMLITE_COLORS, closest_color, color_distance
+from palette import ARMLITE_RGB, ARMLITE_COLORS, closest_color, color_distance
 
 
 # === Constants ===
@@ -53,7 +53,7 @@ PIXEL_MODES = {
     3: (64, 48, 5),
     4: (128, 96, 3),
 }
-DEFAULT_MODE = 3
+DEFAULT_MODE = 4
 
 # Default weights (from conversation context)
 HSV_DEFAULTS = (2.7, 2.2, 8.0)
@@ -808,7 +808,10 @@ class ARMliteStyleApp:
         s_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
         v_vals = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
         
-        best_w = self.weights[:]
+        # Start from space-appropriate defaults (not current slider values)
+        # This ensures consistent results regardless of slider state
+        default_w = HSV_DEFAULTS if self.current_space == 'hsv' else HSL_DEFAULTS
+        best_w = list(default_w)
         best_error = compute_error(best_w)
         
         for h in h_vals:

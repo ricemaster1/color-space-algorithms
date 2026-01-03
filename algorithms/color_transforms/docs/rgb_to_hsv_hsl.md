@@ -325,9 +325,10 @@ This technique—preserving value while replacing hue and saturation—is exactl
 | `_rgb_to_hsv` / `_rgb_to_hsl` | Wrap `colorsys` helpers, normalizing RGB to `[0,1]` floats before returning `(h, s, v/l)` tuples. |
 | `_weighted_distance` | Builds a closure over hue/saturation/value weights. Hue distance wraps around the circle (`min(|Δh|, 1-|Δh|)`) so reds near 0° and 360° still match. |
 | `_palette_space` | Precomputes HSV/HSL representations for every ARMLite palette entry to avoid recomputing transforms per pixel. |
+| `auto_match_weights` | Uses numpy vectorized grid search to find optimal weights that minimize RGB error between original and quantized pixels. Searches over 810 weight combinations and returns the best `(h, s, v)` tuple. |
 | `apply_rgb_to_hsv_hsl` | Resizes the image to `128×96`, walks every pixel, converts it, and picks the closest palette entry via the weighted metric. Returns the grid of ARMLite color names. |
 | `generate_assembly` | Writes the `.Resolution`, `.PixelScreen`, and per-pixel `STR` instructions expected by Peter Higginson's simulator. |
-| `process_image` | Orchestrates the PIL load, resize, conversion, and final write. The CLI funnels into this function.
+| `process_image` | Orchestrates the PIL load, resize, conversion, and final write. Supports auto-matching weights when `--auto` is specified. |
 
 Key design notes:
 - The search is brute-force but the palette is only 256 entries, so Python-level loops remain fast (~0.15 s on an M1 for 128×96 inputs).
@@ -339,17 +340,77 @@ Key design notes:
 ## CLI reference
 | Option | Description |
 | --- | --- |
-| `-o / --output` | Assembly output path. Defaults to `converted.s`. |
-| `--space {hsv,hsl}` | Selects HSV (default) or HSL matching. HSV is better for emissive/glassy looks; HSL balances lightness for flat UI assets. |
-| `--weights H,S,V` | Comma-separated floats controlling the weighting metric. Use `1,1,1` to treat all channels evenly, or bias toward hue (`3,1,0.5`) for cel shading, etc. |
+| `image` | Path to input image (required). Any format PIL can open. |
+| `output` | Assembly output path. Defaults to `converted.s`. If a directory is provided, uses auto-generated filename. |
+| `-s / --space {hsv,hsl}` | Selects HSV (default) or HSL matching. HSV is better for emissive/glassy looks; HSL balances lightness for flat UI assets. |
+| `-w / --weights H,S,V` | Comma-separated floats controlling the weighting metric. Default: `2.7,2.2,8` for HSV, `0.42,0.8,1.5` for HSL. |
+| `-a / --auto` | **Auto-match weights** to minimize RGB error using numpy vectorized grid search. Overrides `--weights` if both specified. Requires numpy. |
 
-Example: preserve saturated blues with strong hue weight and route into CIEDE2000 downstream.
+### Basic usage
 
 ```bash
-$ python algorithms/color_transforms/src/rgb_to_hsv_hsl.py poster.png \
-  --space hsv --weights 2.5,1.2,0.5 -o poster_hsv.s
+# Use default weights for HSV
+python rgb_to_hsv_hsl.py poster.png -o poster.s
+
+# Use HSL with custom weights
+python rgb_to_hsv_hsl.py poster.png --space hsl --weights 0.5,0.8,1.2
 ```
-![Aggressive weighting produces harsh noise](img/)
+
+### Auto-matching weights
+
+The `--auto` flag finds optimal weights by minimizing the RGB error between the original image and its palette-quantized version:
+
+```bash
+# Auto-match with HSV (recommended for most images)
+python rgb_to_hsv_hsl.py poster.png --auto -o poster_auto.s
+
+# Auto-match with HSL
+python rgb_to_hsv_hsl.py poster.png --auto --space hsl
+```
+
+Auto-matching uses a vectorized grid search over 810 weight combinations (9×9×10 for H, S, V/L axes). It reports the optimal weights and average RGB error:
+
+![Auto-matched HSV result](img/auto-hsv-fig.1.png)
+<small>Figure 1: Auto-matched HSV weights preserve saturated colors while minimizing overall RGB error.</small>
+
+![Auto-matched HSL result](img/auto-hsl-fig.2.png)
+<small>Figure 2: Auto-matched HSL weights balance lightness for more even tonal distribution.</small>
+
+---
+
+## Weight Tuner GUI
+
+For interactive weight exploration, use the **Weight Tuner GUI** (`weight_tuner_gui.py`) which provides:
+
+- **Real-time preview**: Adjust H, S, V/L sliders and see the quantized result instantly
+- **Side-by-side comparison**: Original scaled image next to ARMlite-quantized preview
+- **Auto-match button**: One-click optimization using the same algorithm as `--auto`
+- **Multiple pixel modes**: Support for modes 1–4 (16×12 to 128×96)
+- **Export to assembly**: Save directly to `.s` file with proper pixel mode
+
+### GUI usage
+
+```bash
+# Launch with an image
+python weight_tuner_gui.py /path/to/image.png
+
+# Or launch empty and use Ctrl+O to load
+python weight_tuner_gui.py
+```
+
+### Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `Ctrl+O` | Load image |
+| `Ctrl+S` | Export .s file |
+| `R` | Reset weights to defaults |
+| `1`–`4` | Switch pixel mode |
+
+The GUI is especially useful for:
+- Finding optimal weights for a specific image before batch processing
+- Understanding how different weight combinations affect the output
+- Quick iteration on color matching without command-line cycles
 
 ---
 
@@ -366,18 +427,24 @@ Tune weights with fractional steps (e.g., increments of `0.1`). The metric squar
 ---
 
 ## Pipeline ideas
-1. **Hue-protected anime frame**
+1. **Quick auto-matched sprite**
+   - `rgb_to_hsv_hsl.py frame.png --auto` — let the algorithm find optimal weights
+   - Best for: rapid prototyping, batch processing diverse images
+2. **Hue-protected anime frame**
    - `rgb_to_hsv_hsl.py frame.png --space hsv --weights 3,1,0.6`
    - `distance_delta_e.py --metric ciede2000`
    - `floyd-steinberg.py` for fast halftones.
-2. **Pastel UI card**
+3. **Pastel UI card**
    - `rgb_to_hsv_hsl.py card.png --space hsl --weights 0.6,0.5,1.9`
    - `median_cut.py -c 32`
    - `atkinson.py` for soft diffusion.
-3. **Specular metal study**
+4. **Specular metal study**
    - `rgb_to_hsv_hsl.py mech.png --space hsv --weights 1.5,1.5,1.5`
    - `wu_quantizer.py`
    - `sierra.py --variant sierra-lite` to reduce worm artifacts.
+5. **Interactive tuning workflow**
+   - Use `weight_tuner_gui.py` to find optimal weights visually
+   - Export directly from GUI, or note the weights for batch scripting
 
 Document pipelines in `docs/pipelines.md` as you validate them so others can reproduce the recipe.
 
