@@ -207,10 +207,12 @@ if __name__ == '__main__':
     parser.add_argument('image', help='Path to input image')
     parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
     parser.add_argument('-s','--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
-    parser.add_argument('-w', '--weights', default=None, type=str, metavar='W1,W2,W3',
+    
+    weight_group = parser.add_mutually_exclusive_group()
+    weight_group.add_argument('-w', '--weights', default=None, type=str, metavar='W1,W2,W3',
         help='Comma-separated weights for hue,sat,value/lightness matching. For HSV, recommended default is 2.7,2.2,8 and for HSL it is 0.42,0.8,1.5. Negative values are allowed. Setting all weights to 0,0,0 will produce a solid color.')
-    parser.add_argument('-a', '--auto', action='store_true',
-        help='Auto-match weights to minimize RGB error (requires numpy). Overrides --weights if both specified.')
+    weight_group.add_argument('-a', '--auto', action='store_true',
+        help='Auto-match weights to minimize RGB error (requires numpy)')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):
