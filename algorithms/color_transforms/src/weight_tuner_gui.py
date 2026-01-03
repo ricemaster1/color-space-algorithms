@@ -32,12 +32,6 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageTk
 
-try:
-    from scipy.optimize import minimize
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
-
 # Ensure lib is importable
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
@@ -757,7 +751,10 @@ class ARMliteStyleApp:
             messagebox.showwarning("No Image", "Load an image first")
             return
         
-        if not HAS_SCIPY:
+        # Lazy import scipy (heavy initialization)
+        try:
+            from scipy.optimize import minimize
+        except ImportError:
             self._log("scipy not installed - using grid search")
             self._auto_match_grid()
             return
