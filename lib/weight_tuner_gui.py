@@ -118,6 +118,18 @@ def palette_to_space(
 PALETTE_HSV = palette_to_space(rgb_to_hsv)
 PALETTE_HSL = palette_to_space(rgb_to_hsl)
 
+# Pre-compute numpy arrays for fast vectorized quantization
+if HAS_NUMPY:
+    # Palette names in order
+    _PALETTE_NAMES = list(ARMLITE_RGB.keys())
+    
+    # HSV palette as (N, 3) array
+    _PALETTE_HSV_NP = np.array([PALETTE_HSV[n] for n in _PALETTE_NAMES], dtype=np.float32)
+    # HSL palette as (N, 3) array  
+    _PALETTE_HSL_NP = np.array([PALETTE_HSL[n] for n in _PALETTE_NAMES], dtype=np.float32)
+    # RGB palette as (N, 3) array for output
+    _PALETTE_RGB_NP = np.array([ARMLITE_RGB[n] for n in _PALETTE_NAMES], dtype=np.uint8)
+
 
 class ARMliteStyleApp:
     """Main application window with ARMlite-inspired styling."""
@@ -677,7 +689,8 @@ class ARMliteStyleApp:
         """Schedule a display update with debouncing."""
         if self._update_timer:
             self.root.after_cancel(self._update_timer)
-        self._update_timer = self.root.after(50, self._update_displays)
+        # Short debounce - numpy makes rendering fast enough for near-realtime
+        self._update_timer = self.root.after(16, self._update_displays)  # ~60fps target
     
     def _update_displays(self):
         """Update both image displays."""
@@ -712,13 +725,107 @@ class ARMliteStyleApp:
         if self.display_image is None:
             return
         
+        w, h = self.img_width, self.img_height
+        weights = np.array(self.weights, dtype=np.float32) if HAS_NUMPY else tuple(self.weights)
+        
+        if HAS_NUMPY:
+            # Fast vectorized quantization
+            quantized = self._quantize_numpy(w, h, weights)
+        else:
+            # Fallback to slow per-pixel loop
+            quantized = self._quantize_slow(w, h, weights)
+        
+        # Scale up for display
+        display = quantized.resize(
+            (w * self.display_scale, h * self.display_scale),
+            Image.Resampling.NEAREST
+        )
+        
+        self._quantized_photo = ImageTk.PhotoImage(display)
+        self.quantized_canvas.delete("all")
+        self.quantized_canvas.create_image(0, 0, anchor=tk.NW, image=self._quantized_photo)
+    
+    def _quantize_numpy(self, width: int, height: int, weights: 'np.ndarray') -> Image.Image:
+        """Fast numpy-vectorized quantization."""
+        # Get image as numpy array (H, W, 3)
+        img_arr = np.array(self.display_image, dtype=np.float32) / 255.0
+        
+        # Convert RGB to HSV or HSL
+        if self.current_space == 'hsv':
+            # Vectorized RGB->HSV
+            r, g, b = img_arr[:,:,0], img_arr[:,:,1], img_arr[:,:,2]
+            maxc = np.maximum(np.maximum(r, g), b)
+            minc = np.minimum(np.minimum(r, g), b)
+            v = maxc
+            s = np.where(maxc != 0, (maxc - minc) / maxc, 0)
+            
+            # Hue calculation
+            delta = maxc - minc
+            hue = np.zeros_like(maxc)
+            mask_r = (maxc == r) & (delta != 0)
+            mask_g = (maxc == g) & (delta != 0)
+            mask_b = (maxc == b) & (delta != 0)
+            hue[mask_r] = ((g[mask_r] - b[mask_r]) / delta[mask_r]) % 6
+            hue[mask_g] = (b[mask_g] - r[mask_g]) / delta[mask_g] + 2
+            hue[mask_b] = (r[mask_b] - g[mask_b]) / delta[mask_b] + 4
+            hue = hue / 6.0
+            hue[hue < 0] += 1.0
+            
+            converted = np.stack([hue, s, v], axis=-1)  # (H, W, 3)
+            palette_np = _PALETTE_HSV_NP
+        else:
+            # Vectorized RGB->HSL
+            r, g, b = img_arr[:,:,0], img_arr[:,:,1], img_arr[:,:,2]
+            maxc = np.maximum(np.maximum(r, g), b)
+            minc = np.minimum(np.minimum(r, g), b)
+            light = (maxc + minc) / 2.0
+            
+            delta = maxc - minc
+            s = np.zeros_like(light)
+            mask = delta != 0
+            s[mask & (light <= 0.5)] = delta[mask & (light <= 0.5)] / (maxc[mask & (light <= 0.5)] + minc[mask & (light <= 0.5)])
+            s[mask & (light > 0.5)] = delta[mask & (light > 0.5)] / (2.0 - maxc[mask & (light > 0.5)] - minc[mask & (light > 0.5)])
+            
+            # Hue calculation (same as HSV)
+            hue = np.zeros_like(maxc)
+            mask_r = (maxc == r) & (delta != 0)
+            mask_g = (maxc == g) & (delta != 0)
+            mask_b = (maxc == b) & (delta != 0)
+            hue[mask_r] = ((g[mask_r] - b[mask_r]) / delta[mask_r]) % 6
+            hue[mask_g] = (b[mask_g] - r[mask_g]) / delta[mask_g] + 2
+            hue[mask_b] = (r[mask_b] - g[mask_b]) / delta[mask_b] + 4
+            hue = hue / 6.0
+            hue[hue < 0] += 1.0
+            
+            converted = np.stack([hue, s, light], axis=-1)  # (H, W, 3)
+            palette_np = _PALETTE_HSL_NP
+        
+        # Reshape for broadcasting: (H*W, 1, 3) vs (1, N_colors, 3)
+        pixels = converted.reshape(-1, 1, 3)  # (H*W, 1, 3)
+        palette = palette_np.reshape(1, -1, 3)  # (1, N, 3)
+        
+        # Compute weighted distances with hue wrapping
+        dh_raw = np.abs(pixels[:,:,0] - palette[:,:,0])
+        dh = np.minimum(dh_raw, 1.0 - dh_raw)  # Hue wrapping
+        ds = np.abs(pixels[:,:,1] - palette[:,:,1])
+        dv = np.abs(pixels[:,:,2] - palette[:,:,2])
+        
+        # Weighted squared distance (sqrt not needed for argmin)
+        dist = (weights[0] * dh) ** 2 + (weights[1] * ds) ** 2 + (weights[2] * dv) ** 2
+        
+        # Find closest palette index for each pixel
+        closest_idx = np.argmin(dist, axis=1)  # (H*W,)
+        
+        # Map to RGB output
+        output = _PALETTE_RGB_NP[closest_idx].reshape(height, width, 3)
+        
+        return Image.fromarray(output, 'RGB')
+    
+    def _quantize_slow(self, w: int, h: int, weights: tuple) -> Image.Image:
+        """Slow fallback quantization without numpy."""
         transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
         palette = PALETTE_HSV if self.current_space == 'hsv' else PALETTE_HSL
-        weights = (self.weights[0], self.weights[1], self.weights[2])
         
-        w, h = self.img_width, self.img_height
-        
-        # Create quantized image
         quantized = Image.new('RGB', (w, h))
         
         for y in range(h):
@@ -741,15 +848,7 @@ class ARMliteStyleApp:
                 
                 quantized.putpixel((x, y), ARMLITE_RGB[best_name])
         
-        # Scale up for display
-        display = quantized.resize(
-            (w * self.display_scale, h * self.display_scale),
-            Image.Resampling.NEAREST
-        )
-        
-        self._quantized_photo = ImageTk.PhotoImage(display)
-        self.quantized_canvas.delete("all")
-        self.quantized_canvas.create_image(0, 0, anchor=tk.NW, image=self._quantized_photo)
+        return quantized
     
     def _reset_weights(self):
         """Reset weights to defaults for current color space."""
