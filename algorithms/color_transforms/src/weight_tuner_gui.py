@@ -262,6 +262,16 @@ class ARMliteStyleApp:
         )
         self.original_canvas.pack(pady=5)
         
+        # Original image info label
+        self.original_info_label = tk.Label(
+            orig_content,
+            text=f"No image loaded",
+            bg=COLORS['bg_panel'],
+            fg=COLORS['text_dim'],
+            font=('Consolas', 9)
+        )
+        self.original_info_label.pack()
+        
         # Quantized image panel (mimics ARMlite pixel display)
         quant_panel, quant_content = self._create_panel(display_frame, "Input/Output (ARMlite Preview)")
         quant_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
@@ -485,6 +495,14 @@ class ARMliteStyleApp:
         if new_mode != self.pixel_mode:
             self._set_pixel_mode(new_mode)
             self._log(f"Pixel mode changed to {new_mode} ({self.img_width}×{self.img_height})")
+            
+            # Update original info label if image is loaded
+            if self.source_image:
+                src_w, src_h = self.source_image.size
+                self.original_info_label.config(
+                    text=f"{src_w}×{src_h} → {self.img_width}×{self.img_height}"
+                )
+            
             self._update_displays()
     
     def _create_console_section(self, parent: tk.Frame):
@@ -562,8 +580,14 @@ class ARMliteStyleApp:
             self.display_image = self._fit_to_armlite(self.source_image)
             
             filename = os.path.basename(path)
-            self._log(f"Loaded: {filename} ({self.source_image.size[0]}x{self.source_image.size[1]})")
+            src_w, src_h = self.source_image.size
+            self._log(f"Loaded: {filename} ({src_w}x{src_h})")
             self._log(f"Scaled to: {self.display_image.size[0]}x{self.display_image.size[1]}")
+            
+            # Update original info label
+            self.original_info_label.config(
+                text=f"{src_w}×{src_h} → {self.img_width}×{self.img_height}"
+            )
             
             self._update_displays()
             
