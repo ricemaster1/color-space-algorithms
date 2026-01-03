@@ -64,15 +64,24 @@ COLORS = {
     'bg_dark': '#1a1a2e',       # Main background
     'bg_panel': '#16213e',      # Panel background
     'bg_section': '#0f3460',    # Section background
-    'text': '#e8e8e8',          # Main text
+    'text': '#ffffff',          # Main text (white for contrast)
     'text_dim': '#888888',      # Dimmed text
     'accent': '#e94560',        # Accent color (red)
     'accent2': '#00adb5',       # Secondary accent (teal)
     'border': '#1f4068',        # Border color
-    'button': '#0f3460',        # Button background
-    'button_hover': '#1f4068',  # Button hover
+    'button_bg': '#4477aa',     # Button background (medium blue)
+    'button_fg': '#000000',     # Button text (BLACK for macOS contrast)
+    'button_hover': '#5588bb',  # Button hover
+    'match_bg': '#22aa88',      # Match button (green-teal)
     'slider_trough': '#0a0a14', # Slider trough
 }
+
+# Try to import numpy for fast optimization
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 
 
 # === Color space transforms ===
@@ -167,18 +176,34 @@ class ARMliteStyleApp:
         style = ttk.Style()
         style.theme_use('clam')
         
-        # Configure button style
+        # Configure action button style (Load, Export, Reset)
         style.configure(
-            'ARMlite.TButton',
-            background=COLORS['button'],
-            foreground=COLORS['text'],
-            borderwidth=1,
+            'Action.TButton',
+            background=COLORS['button_bg'],
+            foreground=COLORS['button_fg'],
+            borderwidth=2,
             focuscolor='none',
-            padding=(10, 5)
+            padding=(12, 6),
+            font=('Helvetica', 11, 'bold')
         )
-        style.map('ARMlite.TButton',
-            background=[('active', COLORS['button_hover'])],
-            foreground=[('active', COLORS['text'])]
+        style.map('Action.TButton',
+            background=[('active', COLORS['button_hover']), ('pressed', COLORS['button_hover'])],
+            foreground=[('active', COLORS['button_fg'])]
+        )
+        
+        # Configure match button style (green/teal)
+        style.configure(
+            'Match.TButton',
+            background=COLORS['match_bg'],
+            foreground=COLORS['button_fg'],
+            borderwidth=2,
+            focuscolor='none',
+            padding=(12, 6),
+            font=('Helvetica', 11, 'bold')
+        )
+        style.map('Match.TButton',
+            background=[('active', COLORS['accent2']), ('pressed', COLORS['accent2'])],
+            foreground=[('active', COLORS['button_fg'])]
         )
         
         # Configure scale (slider) style
@@ -315,66 +340,38 @@ class ARMliteStyleApp:
         button_frame.pack(fill=tk.X, pady=(0, 10))
         
         # Load button
-        load_btn = tk.Button(
+        load_btn = ttk.Button(
             button_frame,
             text="Load",
             command=self._browse_image,
-            bg=COLORS['button'],
-            fg=COLORS['text'],
-            activebackground=COLORS['button_hover'],
-            activeforeground=COLORS['text'],
-            relief=tk.RAISED,
-            bd=1,
-            padx=15,
-            pady=3
+            style='Action.TButton'
         )
         load_btn.pack(side=tk.LEFT, padx=(0, 5))
         
         # Export button
-        export_btn = tk.Button(
+        export_btn = ttk.Button(
             button_frame,
             text="Export .s",
             command=self._export_assembly,
-            bg=COLORS['button'],
-            fg=COLORS['text'],
-            activebackground=COLORS['button_hover'],
-            activeforeground=COLORS['text'],
-            relief=tk.RAISED,
-            bd=1,
-            padx=15,
-            pady=3
+            style='Action.TButton'
         )
         export_btn.pack(side=tk.LEFT, padx=(0, 5))
         
         # Reset button
-        reset_btn = tk.Button(
+        reset_btn = ttk.Button(
             button_frame,
             text="Reset",
             command=self._reset_weights,
-            bg=COLORS['button'],
-            fg=COLORS['text'],
-            activebackground=COLORS['button_hover'],
-            activeforeground=COLORS['text'],
-            relief=tk.RAISED,
-            bd=1,
-            padx=15,
-            pady=3
+            style='Action.TButton'
         )
         reset_btn.pack(side=tk.LEFT, padx=(0, 5))
         
         # Match button (auto-optimize weights)
-        match_btn = tk.Button(
+        match_btn = ttk.Button(
             button_frame,
             text="Match",
             command=self._auto_match,
-            bg=COLORS['accent2'],
-            fg=COLORS['text'],
-            activebackground=COLORS['button_hover'],
-            activeforeground=COLORS['text'],
-            relief=tk.RAISED,
-            bd=1,
-            padx=15,
-            pady=3
+            style='Match.TButton'
         )
         match_btn.pack(side=tk.LEFT, padx=(0, 20))
         
@@ -746,71 +743,97 @@ class ARMliteStyleApp:
         self._schedule_update()
     
     def _auto_match(self):
-        """Auto-optimize weights to best match original image colors."""
+        """Fast auto-optimize weights using numpy vectorized grid search."""
         if self.display_image is None:
             messagebox.showwarning("No Image", "Load an image first")
             return
         
-        # Lazy import scipy (heavy initialization)
-        try:
-            from scipy.optimize import minimize
-        except ImportError:
-            self._log("scipy not installed - using grid search")
+        if not HAS_NUMPY:
+            self._log("numpy not installed - using fallback grid search")
             self._auto_match_grid()
             return
         
-        self._log("Optimizing weights...")
+        self._log("Optimizing weights (fast grid search)...")
         self.root.update()
         
-        # Get palette in current color space
+        # Get transform and palette for current color space
         transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
         palette = PALETTE_HSV if self.current_space == 'hsv' else PALETTE_HSL
         
-        # Cache pixel data for speed
-        pixels = []
+        # Build numpy arrays for vectorized computation
+        palette_names = list(palette.keys())
+        palette_hsv = np.array([palette[n] for n in palette_names])  # (147, 3)
+        palette_rgb = np.array([ARMLITE_RGB[n] for n in palette_names])  # (147, 3)
+        
+        # Cache pixel data as numpy arrays
+        orig_rgb_list = []
+        px_space_list = []
         for y in range(self.img_height):
             for x in range(self.img_width):
                 px = self.display_image.getpixel((x, y))
                 if isinstance(px, (tuple, list)) and len(px) >= 3:
                     rgb = (px[0], px[1], px[2])
-                    pixels.append(transform(rgb))
+                    orig_rgb_list.append(rgb)
+                    px_space_list.append(transform(rgb))
         
-        def objective(w):
-            """Total color distance for given weights."""
-            total = 0.0
-            weights = (w[0], w[1], w[2])
-            for px_space in pixels:
-                best_dist = float('inf')
-                for name, pal_space in palette.items():
-                    d = weighted_distance(px_space, pal_space, weights)
-                    if d < best_dist:
-                        best_dist = d
-                total += best_dist
-            return total
+        orig_rgb = np.array(orig_rgb_list)  # (N, 3)
+        px_space = np.array(px_space_list)  # (N, 3)
         
-        # Start from current weights
-        x0 = self.weights[:]
+        def compute_error(weights):
+            """Compute total RGB error for given weights (vectorized)."""
+            w = np.array(weights)
+            
+            # Compute weighted distance from each pixel to each palette color
+            # Handle hue wrapping
+            dh = np.abs(px_space[:, None, 0] - palette_hsv[None, :, 0])
+            dh = np.minimum(dh, 1.0 - dh)  # Hue wrapping
+            ds = np.abs(px_space[:, None, 1] - palette_hsv[None, :, 1])
+            dv = np.abs(px_space[:, None, 2] - palette_hsv[None, :, 2])
+            
+            # Weighted distance: (N, 147)
+            dist = np.sqrt((w[0] * dh)**2 + (w[1] * ds)**2 + (w[2] * dv)**2)
+            
+            # Find best match for each pixel
+            best_idx = np.argmin(dist, axis=1)  # (N,)
+            matched_rgb = palette_rgb[best_idx]  # (N, 3)
+            
+            # Compute RGB error
+            rgb_diff = orig_rgb - matched_rgb
+            total_error = np.sum(rgb_diff ** 2)
+            return total_error
         
-        # Optimize with bounds [0.1, 10]
-        result = minimize(
-            objective,
-            x0,
-            method='L-BFGS-B',
-            bounds=[(0.1, 10.0), (0.1, 10.0), (0.1, 10.0)]
-        )
+        # Grid search over weight space
+        # Use finer grid for better results
+        h_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+        s_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+        v_vals = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+        
+        best_w = self.weights[:]
+        best_error = compute_error(best_w)
+        
+        for h in h_vals:
+            for s in s_vals:
+                for v in v_vals:
+                    err = compute_error([h, s, v])
+                    if err < best_error:
+                        best_error = err
+                        best_w = [h, s, v]
         
         # Apply optimized weights
-        self.weights = list(result.x)
+        self.weights = best_w
         for i, var in enumerate(self.slider_vars):
             var.set(self.weights[i])
             self.slider_labels[i].config(text=f"{self.weights[i]:.2f}")
         
+        # Report result
+        avg_error = math.sqrt(best_error / len(orig_rgb))
         self._log(f"Optimized {self.current_space.upper()}: ({self.weights[0]:.2f}, {self.weights[1]:.2f}, {self.weights[2]:.2f})")
+        self._log(f"Avg RGB error: {avg_error:.1f}")
         self._update_weight_display()
         self._schedule_update()
     
     def _auto_match_grid(self):
-        """Grid search fallback when scipy is not available."""
+        """Grid search fallback when numpy is not available."""
         transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
         palette = PALETTE_HSV if self.current_space == 'hsv' else PALETTE_HSL
         
