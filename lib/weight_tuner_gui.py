@@ -155,6 +155,13 @@ class ARMliteStyleApp:
         # Debounce timer for slider updates
         self._update_timer: Optional[str] = None
         
+        # Caches for performance
+        # Auto-match cache: (image_id, color_space) -> (weights, avg_error)
+        self._match_cache: dict[tuple[int, str], tuple[list[float], float]] = {}
+        # Quantized image cache: (image_id, color_space, weights_tuple) -> PIL.Image
+        self._quant_cache: dict[tuple[int, str, tuple[float, ...]], Image.Image] = {}
+        self._image_id: int = 0  # Incremented on each new image load
+        
         self._setup_styles()
         self._create_layout()
         self._bind_shortcuts()
@@ -593,6 +600,10 @@ class ARMliteStyleApp:
         # Re-process image if loaded
         if self.source_image:
             self.display_image = self._fit_to_armlite(self.source_image)
+            # Invalidate caches (image dimensions changed)
+            self._image_id += 1
+            self._match_cache.clear()
+            self._quant_cache.clear()
             self._schedule_update()
     
     def _browse_image(self):
@@ -613,6 +624,11 @@ class ARMliteStyleApp:
             
             # Scale to ARMlite size (64x48) preserving aspect ratio with padding
             self.display_image = self._fit_to_armlite(self.source_image)
+            
+            # Invalidate caches for new image
+            self._image_id += 1
+            self._match_cache.clear()
+            self._quant_cache.clear()
             
             filename = os.path.basename(path)
             src_w, src_h = self.source_image.size
@@ -726,14 +742,29 @@ class ARMliteStyleApp:
             return
         
         w, h = self.img_width, self.img_height
-        weights = np.array(self.weights, dtype=np.float32) if HAS_NUMPY else tuple(self.weights)
+        weights_tuple = (round(self.weights[0], 2), round(self.weights[1], 2), round(self.weights[2], 2))
         
-        if HAS_NUMPY:
-            # Fast vectorized quantization
-            quantized = self._quantize_numpy(w, h, weights)
+        # Check quantization cache
+        cache_key = (self._image_id, self.current_space, weights_tuple)
+        if cache_key in self._quant_cache:
+            quantized = self._quant_cache[cache_key]
         else:
-            # Fallback to slow per-pixel loop
-            quantized = self._quantize_slow(w, h, weights)
+            # Compute and cache
+            weights = np.array(self.weights, dtype=np.float32) if HAS_NUMPY else tuple(self.weights)
+            
+            if HAS_NUMPY:
+                # Fast vectorized quantization
+                quantized = self._quantize_numpy(w, h, weights)
+            else:
+                # Fallback to slow per-pixel loop
+                quantized = self._quantize_slow(w, h, weights)
+            
+            # Cache result (limit cache size to avoid memory bloat)
+            if len(self._quant_cache) > 100:
+                # Remove oldest entries (simple FIFO)
+                oldest_key = next(iter(self._quant_cache))
+                del self._quant_cache[oldest_key]
+            self._quant_cache[cache_key] = quantized
         
         # Scale up for display
         display = quantized.resize(
@@ -871,6 +902,20 @@ class ARMliteStyleApp:
             messagebox.showwarning("No Image", "Load an image first")
             return
         
+        # Check cache first
+        cache_key = (self._image_id, self.current_space)
+        if cache_key in self._match_cache:
+            cached_weights, cached_error = self._match_cache[cache_key]
+            self.weights = list(cached_weights)
+            for i, var in enumerate(self.slider_vars):
+                var.set(self.weights[i])
+                self.slider_entries[i].set(f"{self.weights[i]:.2f}")
+            self._log(f"[cached] {self.current_space.upper()}: ({self.weights[0]:.2f}, {self.weights[1]:.2f}, {self.weights[2]:.2f})")
+            self._log(f"Avg RGB error: {cached_error:.1f}")
+            self._update_weight_display()
+            self._schedule_update()
+            return
+        
         if not HAS_NUMPY:
             self._log("numpy not installed - using fallback grid search")
             self._auto_match_grid()
@@ -951,8 +996,9 @@ class ARMliteStyleApp:
             var.set(self.weights[i])
             self.slider_entries[i].set(f"{self.weights[i]:.2f}")
         
-        # Report result
+        # Report result and cache
         avg_error = math.sqrt(best_error / len(orig_rgb))
+        self._match_cache[cache_key] = (list(best_w), avg_error)
         self._log(f"Optimized {self.current_space.upper()}: ({self.weights[0]:.2f}, {self.weights[1]:.2f}, {self.weights[2]:.2f})")
         self._log(f"Avg RGB error: {avg_error:.1f}")
         self._update_weight_display()
