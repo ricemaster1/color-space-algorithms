@@ -186,6 +186,8 @@ class ARMliteStyleApp:
         """Bind keyboard shortcuts."""
         self.root.bind('<Control-o>', lambda e: self._browse_image())
         self.root.bind('<Control-s>', lambda e: self._export_assembly())
+        self.root.bind('<Control-p>', lambda e: self._export_preview())
+        self.root.bind('<Control-Shift-s>', lambda e: self._export_both())
         self.root.bind('<r>', lambda e: self._reset_weights())
         self.root.bind('<R>', lambda e: self._reset_weights())
         for mode in PIXEL_MODES:
@@ -223,6 +225,20 @@ class ARMliteStyleApp:
         )
         style.map('Match.TButton',
             background=[('active', COLORS['accent2']), ('pressed', COLORS['accent2'])],
+            foreground=[('active', COLORS['button_fg'])]
+        )
+        
+        # Configure export menubutton style
+        style.configure(
+            'Export.TMenubutton',
+            background=COLORS['button_bg'],
+            foreground=COLORS['button_fg'],
+            borderwidth=2,
+            padding=(12, 6),
+            font=('Helvetica', 11, 'bold')
+        )
+        style.map('Export.TMenubutton',
+            background=[('active', COLORS['button_hover'])],
             foreground=[('active', COLORS['button_fg'])]
         )
         
@@ -368,12 +384,27 @@ class ARMliteStyleApp:
         )
         load_btn.pack(side=tk.LEFT, padx=(0, 5))
         
-        # Export button
-        export_btn = ttk.Button(
+        # Export menubutton with dropdown
+        self.export_menu = tk.Menu(button_frame, tearoff=0,
+            bg=COLORS['bg_section'], fg=COLORS['text'],
+            activebackground=COLORS['accent2'], activeforeground=COLORS['button_fg'],
+            font=('Helvetica', 11))
+        self.export_menu.add_command(
+            label="Assembly (.s)          Ctrl+S",
+            command=self._export_assembly)
+        self.export_menu.add_command(
+            label="Preview PNG            Ctrl+P",
+            command=self._export_preview)
+        self.export_menu.add_separator()
+        self.export_menu.add_command(
+            label="Both (.s + PNG)   Ctrl+Shift+S",
+            command=self._export_both)
+        
+        export_btn = ttk.Menubutton(
             button_frame,
-            text="Export .s",
-            command=self._export_assembly,
-            style='Action.TButton'
+            text="Export ▾",
+            menu=self.export_menu,
+            style='Export.TMenubutton'
         )
         export_btn.pack(side=tk.LEFT, padx=(0, 5))
         
@@ -584,7 +615,7 @@ class ARMliteStyleApp:
         
         # Initial message
         self._log("ARMlite Weight Tuner initialized")
-        self._log("Shortcuts: Ctrl+O=Load, Ctrl+S=Export, R=Reset, 1-4=Mode")
+        self._log("Shortcuts: Ctrl+O=Load, Ctrl+S=.s, Ctrl+P=PNG, R=Reset, 1-4=Mode")
         self._log("LOAD an image to begin")
     
     def _log(self, message: str):
@@ -1152,6 +1183,108 @@ class ARMliteStyleApp:
         except Exception as e:
             self._log(f"Export error: {e}")
             messagebox.showerror("Export Error", str(e))
+    
+    def _export_preview(self):
+        """Export current quantized image as PNG preview."""
+        if self.display_image is None:
+            messagebox.showwarning("No Image", "Load an image first")
+            return
+        
+        # Generate default filename based on mode
+        use_truecolor = self.truecolor_var.get()
+        if use_truecolor:
+            default_name = "truecolor_preview.png"
+        else:
+            space = self.current_space
+            w = self.weights
+            default_name = f"{space}_{w[0]:.1f}_{w[1]:.1f}_{w[2]:.1f}_preview.png"
+        
+        filetypes = [("PNG files", "*.png"), ("All files", "*.*")]
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=filetypes,
+            initialfile=default_name
+        )
+        
+        if not path:
+            return
+        
+        try:
+            self._save_preview_image(path)
+            self._log(f"Preview saved: {os.path.basename(path)}")
+            messagebox.showinfo("Preview Saved", f"Saved to:\n{path}")
+        except Exception as e:
+            self._log(f"Preview error: {e}")
+            messagebox.showerror("Preview Error", str(e))
+    
+    def _export_both(self):
+        """Export both assembly (.s) and preview PNG."""
+        if self.display_image is None:
+            messagebox.showwarning("No Image", "Load an image first")
+            return
+        
+        # Generate default filename based on mode
+        use_truecolor = self.truecolor_var.get()
+        if use_truecolor:
+            default_base = "truecolor"
+        else:
+            space = self.current_space
+            w = self.weights
+            default_base = f"{space}_{w[0]:.1f}_{w[1]:.1f}_{w[2]:.1f}"
+        
+        # Ask for assembly file (PNG will use same basename)
+        filetypes = [("Assembly files", "*.s"), ("All files", "*.*")]
+        asm_path = filedialog.asksaveasfilename(
+            defaultextension=".s",
+            filetypes=filetypes,
+            initialfile=f"{default_base}.s",
+            title="Export Assembly (PNG will be saved alongside)"
+        )
+        
+        if not asm_path:
+            return
+        
+        # Derive PNG path from assembly path
+        base_path = os.path.splitext(asm_path)[0]
+        png_path = f"{base_path}_preview.png"
+        
+        try:
+            self._generate_assembly(asm_path)
+            self._save_preview_image(png_path)
+            self._log(f"Exported: {os.path.basename(asm_path)} + preview")
+            messagebox.showinfo("Export Complete", 
+                f"Saved to:\n{asm_path}\n{png_path}")
+        except Exception as e:
+            self._log(f"Export error: {e}")
+            messagebox.showerror("Export Error", str(e))
+    
+    def _save_preview_image(self, path: str):
+        """Save the quantized preview as a PNG image."""
+        w, h = self.img_width, self.img_height
+        use_truecolor = self.truecolor_var.get()
+        
+        # Create preview image at native resolution
+        preview_img = Image.new('RGB', (w, h))
+        px = preview_img.load()
+        
+        for y in range(h):
+            for x in range(w):
+                src_px = self.display_image.getpixel((x, y))
+                if isinstance(src_px, int):
+                    rgb = (src_px, src_px, src_px)
+                else:
+                    rgb = (src_px[0], src_px[1], src_px[2])
+                
+                if use_truecolor:
+                    # True color: use exact RGB
+                    px[x, y] = rgb
+                else:
+                    # Palette mode: quantize to closest color
+                    transform = rgb_to_hsv if self.current_space == 'hsv' else rgb_to_hsl
+                    color_name = closest_color(rgb, transform, tuple(self.weights))
+                    px[x, y] = ARMLITE_RGB[color_name]
+        
+        preview_img.save(path)
     
     def _generate_assembly(self, output_path: str):
         """Generate ARMlite assembly file."""
