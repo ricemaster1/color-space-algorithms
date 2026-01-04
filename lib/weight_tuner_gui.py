@@ -436,6 +436,7 @@ class ARMliteStyleApp:
             button_frame,
             text="True Color",
             variable=self.truecolor_var,
+            command=self._on_truecolor_toggle,
             bg=COLORS['bg_panel'],
             fg=COLORS['text'],
             selectcolor=COLORS['bg_section'],
@@ -690,6 +691,13 @@ class ARMliteStyleApp:
             self._update_weight_display()
             self._schedule_update()
     
+    def _on_truecolor_toggle(self):
+        """Handle truecolor checkbox toggle."""
+        is_truecolor = self.truecolor_var.get()
+        mode = "True Color (24-bit RGB)" if is_truecolor else "Palette (147 colors)"
+        self._log(f"Output mode: {mode}")
+        self._schedule_update()
+    
     def _on_slider_change(self, index: int):
         """Handle slider value change."""
         value = self.slider_vars[index].get()
@@ -756,11 +764,24 @@ class ARMliteStyleApp:
         self.original_canvas.create_image(0, 0, anchor=tk.NW, image=self._original_photo)
     
     def _draw_quantized(self):
-        """Draw the quantized image using ARMlite palette."""
+        """Draw the quantized image using ARMlite palette, or original if truecolor."""
         if self.display_image is None:
             return
         
         w, h = self.img_width, self.img_height
+        
+        # Truecolor mode: show original image (no quantization)
+        if self.truecolor_var.get():
+            display = self.display_image.resize(
+                (w * self.display_scale, h * self.display_scale),
+                Image.Resampling.NEAREST
+            )
+            self._quantized_photo = ImageTk.PhotoImage(display)
+            self.quantized_canvas.delete("all")
+            self.quantized_canvas.create_image(0, 0, anchor=tk.NW, image=self._quantized_photo)
+            return
+        
+        # Palette mode: quantize to 147 colors
         weights_tuple = (round(self.weights[0], 2), round(self.weights[1], 2), round(self.weights[2], 2))
         
         # Check quantization cache
