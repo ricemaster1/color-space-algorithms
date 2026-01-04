@@ -8,7 +8,7 @@ import math
 import os
 import sys
 from pathlib import Path
-from typing import Callable, Iterable, Tuple
+from typing import Callable, Iterable, Tuple, Union
 
 # Try numpy for fast auto-matching
 try:
@@ -24,6 +24,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from lib.palette import ARMLITE_RGB, ARMLITE_COLORS, closest_color
+from lib.truecolor import rgb_to_hex, generate_truecolor_assembly
 
 
 def _rgb_to_hsv(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
@@ -166,19 +167,50 @@ def apply_rgb_to_hsv_hsl(
     img: Image.Image,
     space: str = 'hsv',
     weights: tuple[float, float, float] = (1.0, 1.0, 1.0),
-) -> list[list[str]]:
+    truecolor: bool = True,
+) -> Union[list[list[str]], list[list[int]]]:
+    """
+    Convert image to color grid using HSV/HSL color space matching.
+    
+    Args:
+        img: PIL Image in RGB mode
+        space: Color space ('hsv' or 'hsl')
+        weights: Weights for (hue, saturation, value/lightness) matching
+        truecolor: If True, return hex values (no quantization).
+                   If False, return palette color names (147 colors).
+    
+    Returns:
+        2D grid of hex values (truecolor) or color names (palette mode)
+    """
     width, height = img.size
+    
+    # Truecolor mode: just return the exact RGB values as hex
+    if truecolor:
+        grid: list[list[int]] = []
+        for y in range(height):
+            row: list[int] = []
+            for x in range(width):
+                rgb = img.getpixel((x, y))
+                if isinstance(rgb, int):
+                    rgb = (rgb, rgb, rgb)
+                row.append(rgb_to_hex(rgb[0], rgb[1], rgb[2]))
+            grid.append(row)
+        return grid
+    
+    # Palette mode: quantize to 147 named colors
     transform = _rgb_to_hsv if space == 'hsv' else _rgb_to_hsl
     metric = _weighted_distance(*weights)
 
     palette_space = _palette_space(ARMLITE_RGB, transform)
-    grid: list[list[str]] = []
+    name_grid: list[list[str]] = []
 
     for y in range(height):
-        row: list[str] = []
+        name_row: list[str] = []
         for x in range(width):
             rgb = img.getpixel((x, y))
-            converted = transform(rgb)
+            if isinstance(rgb, int):
+                rgb = (rgb, rgb, rgb)
+            converted = transform((rgb[0], rgb[1], rgb[2]))
             best_name = 'black'
             best_distance = float('inf')
             for name, target in palette_space.items():
@@ -186,17 +218,50 @@ def apply_rgb_to_hsv_hsl(
                 if dist < best_distance:
                     best_distance = dist
                     best_name = name
-            row.append(best_name)
-        grid.append(row)
-    return grid
+            name_row.append(best_name)
+        name_grid.append(name_row)
+    return name_grid
 
 
-def generate_assembly(color_grid, output_path, *, image_path: str = '', space: str = '', weights: tuple[float, float, float] = (1.0, 1.0, 1.0)):
+def generate_assembly(
+    color_grid: Union[list[list[str]], list[list[int]]],
+    output_path: str,
+    *,
+    image_path: str = '',
+    space: str = '',
+    weights: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    truecolor: bool = True,
+):
+    """
+    Generate ARMlite assembly file.
+    
+    Args:
+        color_grid: 2D grid of hex values (truecolor) or color names (palette)
+        output_path: Path to write assembly file
+        image_path: Original image path (for comments)
+        space: Color space used ('hsv' or 'hsl')
+        weights: Weights used for palette matching (ignored in truecolor mode)
+        truecolor: If True, color_grid contains hex values. If False, color names.
+    """
+    # Truecolor mode: delegate to lib/truecolor.py
+    if truecolor:
+        comment = f'Color space: {space.upper()}' if space else ''
+        generate_truecolor_assembly(
+            color_grid,  # type: ignore
+            output_path,
+            image_path=image_path,
+            resolution='hi',
+            comment=comment,
+        )
+        print(f"True color assembly written to {output_path}")
+        return
+    
+    # Palette mode: generate assembly with named colors
     height = len(color_grid)
     width = len(color_grid[0]) if height else 0
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     lines = [
-        '; === Fullscreen Sprite ===',
+        '; === Fullscreen Sprite (147-color palette) ===',
         f'; Generated: {timestamp}',
         f'; Source: {os.path.basename(image_path)}' if image_path else '',
         f'; Color space: {space.upper()} weights=({weights[0]}, {weights[1]}, {weights[2]})' if space else '',
@@ -218,47 +283,80 @@ def generate_assembly(color_grid, output_path, *, image_path: str = '', space: s
     lines.append('    HALT')
     with open(output_path, 'w') as fh:
         fh.write('\n'.join(lines))
-    print(f"Assembly sprite file written to {output_path}")
+    print(f"Palette assembly written to {output_path}")
 
 
-def process_image(image_path, output_path, space: str, weights: tuple[float, float, float], auto: bool = False):
+def process_image(
+    image_path: str,
+    output_path: str,
+    space: str,
+    weights: tuple[float, float, float],
+    auto: bool = False,
+    truecolor: bool = True,
+):
+    """
+    Process an image and generate ARMlite assembly.
+    
+    Args:
+        image_path: Path to input image
+        output_path: Path to write assembly file
+        space: Color space ('hsv' or 'hsl')
+        weights: Weights for palette matching (ignored in truecolor mode)
+        auto: Auto-optimize weights (only for palette mode)
+        truecolor: Use full 24-bit RGB (default) or 147-color palette
+    """
     img = Image.open(image_path).convert('RGB')
     img = img.resize((128, 96))
     
-    # Auto-match weights if requested
-    if auto:
+    # Auto-match weights only makes sense for palette mode
+    if auto and not truecolor:
         weights = auto_match_weights(img, space)
     
-    grid = apply_rgb_to_hsv_hsl(img, space=space, weights=weights)
-    generate_assembly(grid, output_path, image_path=image_path, space=space, weights=weights)
+    grid = apply_rgb_to_hsv_hsl(img, space=space, weights=weights, truecolor=truecolor)
+    generate_assembly(grid, output_path, image_path=image_path, space=space, weights=weights, truecolor=truecolor)
     return weights
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='RGB→HSV/HSL workflow renderer for ARMLite sprites'
+        description='RGB→HSV/HSL workflow renderer for ARMLite sprites. Uses true color (24-bit RGB) by default.'
     )
     parser.add_argument('image', help='Path to input image')
     parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
     parser.add_argument('-s','--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
     
+    # Color mode: truecolor (default) vs palette
+    color_mode = parser.add_mutually_exclusive_group()
+    color_mode.add_argument('--truecolor', '-t', action='store_true', default=True,
+        help='Use full 24-bit RGB colors (default). No quantization.')
+    color_mode.add_argument('--palette', '-p', action='store_true',
+        help='Use 147-color CSS3 palette instead of true color.')
+    
+    # Palette-only options
     weight_group = parser.add_mutually_exclusive_group()
     weight_group.add_argument('-w', '--weights', default=None, type=str, metavar='W1,W2,W3',
-        help='Comma-separated weights for hue,sat,value/lightness matching. For HSV, recommended default is 2.7,2.2,8 and for HSL it is 0.42,0.8,1.5. Negative values are allowed. Setting all weights to 0,0,0 will produce a solid color.')
+        help='[Palette mode] Comma-separated weights for hue,sat,value/lightness matching. For HSV, recommended default is 2.7,2.2,8 and for HSL it is 0.42,0.8,1.5.')
     weight_group.add_argument('-a', '--auto', action='store_true',
-        help='Auto-match weights to minimize RGB error (requires numpy)')
+        help='[Palette mode] Auto-match weights to minimize RGB error (requires numpy)')
     args = parser.parse_args()
 
     if not os.path.isfile(args.image):
         print('Image not found.')
         sys.exit(1)
+    
+    # Determine if using truecolor or palette mode
+    use_truecolor = not args.palette
+    
+    # Warn if palette options used with truecolor
+    if use_truecolor and (args.weights or args.auto):
+        print('Note: --weights and --auto are ignored in true color mode. Use --palette to enable.')
 
-    # Determine weights, allowing negative values and proper defaults for HSL
+    # Determine weights (only relevant for palette mode)
     weights: tuple[float, float, float]
-    if args.auto:
+    if args.auto and not use_truecolor:
         # Will be computed later in process_image
         weights = (0.0, 0.0, 0.0)  # placeholder
-    elif args.weights is not None:
+    elif args.weights is not None and not use_truecolor:
         try:
             weights = tuple(float(w.strip()) for w in args.weights.split(','))  # type: ignore[assignment]
         except Exception:
@@ -270,15 +368,18 @@ if __name__ == '__main__':
     else:
         weights = (2.7, 2.2, 8.0) if args.space == 'hsv' else (0.42, 0.8, 1.5)
 
-    # Process image (auto-match will compute weights if --auto)
+    # Process image (auto-match will compute weights if --auto and palette mode)
     img_for_weights = Image.open(args.image).convert('RGB').resize((128, 96))
-    if args.auto:
+    if args.auto and not use_truecolor:
         weights = auto_match_weights(img_for_weights, args.space)
 
-    # Build default filename from color space and weights
-    default_filename = f'{args.space}_{weights[0]}_{weights[1]}_{weights[2]}.s'
+    # Build default filename
+    if use_truecolor:
+        default_filename = 'truecolor.s'
+    else:
+        default_filename = f'{args.space}_{weights[0]}_{weights[1]}_{weights[2]}.s'
     
-    # If output is a directory, save with weight-based filename inside it
+    # If output is a directory, save with appropriate filename inside it
     output_path = args.output
     if output_path:
         output_path = os.path.expanduser(output_path)
@@ -293,4 +394,4 @@ if __name__ == '__main__':
     else:
         output_path = default_filename
     
-    process_image(args.image, output_path, args.space, weights)
+    process_image(args.image, output_path, args.space, weights, auto=args.auto, truecolor=use_truecolor)

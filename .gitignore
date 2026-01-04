@@ -1,7 +1,8 @@
-# Local development directories (not tracked in remote)
+# Directories 
 old/
 tests/
 debug/
+algorithms/truecolor/
 
 # macOS
 .DS_Store
