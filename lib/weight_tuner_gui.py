@@ -402,7 +402,7 @@ class ARMliteStyleApp:
         
         export_btn = ttk.Menubutton(
             button_frame,
-            text="Export ▾",
+            text="Export",
             menu=self.export_menu,
             style='Export.TMenubutton'
         )
