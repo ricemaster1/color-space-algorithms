@@ -176,6 +176,20 @@ For each pixel:
 
 ## Sources
 
-- [CIE 1976 L\*a\*b\* Color Space](https://en.wikipedia.org/wiki/CIELAB_color_space)
-- [sRGB to XYZ Conversion](http://www.brucelindbloom.com/index.html?Eqn_RGB_to_XYZ.html)
-- [Color Difference Formulas](https://en.wikipedia.org/wiki/Color_difference)
+1. **CIE 15:2004** — *Colorimetry*, 3rd Edition. Commission Internationale de l'Éclairage, 2004. ISBN 3-901-906-33-9. The authoritative reference defining CIELAB (L\*a\*b\*) color space and standard illuminants.
+   - [Full text (Archive.org)](https://archive.org/details/gov.law.cie.15.2004)
+
+2. **ICC.1:2004-10** — *Image technology colour management — Architecture, profile format and data structure* (Profile version 4.2.0.0). International Color Consortium, 2006. Defines Lab as profile connection space.
+   - [Specification PDF](https://www.color.org/icc1v42.pdf)
+
+3. MacEvoy, B. "Modern Color Models — CIELUV." *Handprint*. Comprehensive explanation of CIELAB/CIELUV history and color science.
+   - [handprint.com](https://www.handprint.com/HP/WCL/color7.html#CIELUV)
+
+4. Lindbloom, B. "Uniform Perceptual Lab (UPLab)." Discussion of perceptual non-uniformities in CIELAB and proposed improvements.
+   - [brucelindbloom.com](http://www.brucelindbloom.com/index.html?UPLab.html)
+
+5. Lindbloom, B. "Working Space Information." 3D representations of L\*a\*b\* gamut and RGB working space comparisons.
+   - [brucelindbloom.com](http://www.brucelindbloom.com/index.html?WorkingSpaceInfo.html)
+
+6. Jain, A. K. (1989). *Fundamentals of Digital Image Processing*. Prentice Hall. ISBN 0-13-336165-9. Covers perceptual color differences and Euclidean distance in L\*a\*b\*.
+   - [Full text (Archive.org)](https://archive.org/details/fundamentalsofdi0000jain)
