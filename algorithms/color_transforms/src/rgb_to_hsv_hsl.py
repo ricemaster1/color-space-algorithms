@@ -67,63 +67,97 @@ def auto_match_weights(img: Image.Image, space: str = 'hsv') -> tuple[float, flo
     palette_hsv = np.array([palette[n] for n in palette_names])  # (147, 3)
     palette_rgb = np.array([ARMLITE_RGB[n] for n in palette_names])  # (147, 3)
     
-    # Cache pixel data as numpy arrays
-    width, height = img.size
-    orig_rgb_list = []
-    px_space_list = []
-    for y in range(height):
-        for x in range(width):
-            px = img.getpixel((x, y))
-            if isinstance(px, (tuple, list)) and len(px) >= 3:
-                rgb = (px[0], px[1], px[2])
-                orig_rgb_list.append(rgb)
-                px_space_list.append(transform(rgb))
+    # Convert image to numpy and transform to color space (vectorized)
+    img_arr = np.array(img, dtype=np.float32) / 255.0
     
-    orig_rgb = np.array(orig_rgb_list)  # (N, 3)
-    px_space = np.array(px_space_list)  # (N, 3)
+    r, g, b = img_arr[:,:,0], img_arr[:,:,1], img_arr[:,:,2]
+    maxc = np.maximum(np.maximum(r, g), b)
+    minc = np.minimum(np.minimum(r, g), b)
+    delta = maxc - minc
     
-    def compute_error(weights):
-        """Compute total RGB error for given weights (vectorized)."""
-        w = np.array(weights)
+    # Hue calculation (common to HSV and HSL)
+    hue = np.zeros_like(maxc)
+    mask_r = (maxc == r) & (delta != 0)
+    mask_g = (maxc == g) & (delta != 0)
+    mask_b = (maxc == b) & (delta != 0)
+    hue[mask_r] = ((g[mask_r] - b[mask_r]) / delta[mask_r]) % 6
+    hue[mask_g] = (b[mask_g] - r[mask_g]) / delta[mask_g] + 2
+    hue[mask_b] = (r[mask_b] - g[mask_b]) / delta[mask_b] + 4
+    hue = hue / 6.0
+    hue[hue < 0] += 1.0
+    
+    if space == 'hsv':
+        sat = np.where(maxc != 0, delta / maxc, 0)
+        val = maxc
+        px_space = np.stack([hue, sat, val], axis=-1).reshape(-1, 3)
+    else:
+        light = (maxc + minc) / 2.0
+        sat = np.zeros_like(light)
+        mask = delta != 0
+        sat[mask & (light <= 0.5)] = delta[mask & (light <= 0.5)] / (maxc[mask & (light <= 0.5)] + minc[mask & (light <= 0.5)])
+        sat[mask & (light > 0.5)] = delta[mask & (light > 0.5)] / (2.0 - maxc[mask & (light > 0.5)] - minc[mask & (light > 0.5)])
+        px_space = np.stack([hue, sat, light], axis=-1).reshape(-1, 3)
+    
+    orig_rgb = (img_arr * 255).reshape(-1, 3).astype(np.int16)  # (N, 3)
+    n_pixels = len(orig_rgb)
+    
+    # Pre-compute differences (constant across all weight combos)
+    dh_raw = np.abs(px_space[:, None, 0] - palette_hsv[None, :, 0])
+    dh2 = np.minimum(dh_raw, 1.0 - dh_raw) ** 2  # Hue wrapping + square
+    ds2 = (px_space[:, None, 1] - palette_hsv[None, :, 1]) ** 2
+    dv2 = (px_space[:, None, 2] - palette_hsv[None, :, 2]) ** 2
+    
+    def evaluate_weights(weights_arr):
+        """Evaluate all weight combinations, return errors array."""
+        weights_sq = weights_arr ** 2
+        n_weights = len(weights_arr)
+        errors = np.zeros(n_weights, dtype=np.float64)
+        chunk_size = 3000
         
-        # Compute weighted distance from each pixel to each palette color
-        # Handle hue wrapping
-        dh = np.abs(px_space[:, None, 0] - palette_hsv[None, :, 0])
-        dh = np.minimum(dh, 1.0 - dh)  # Hue wrapping
-        ds = np.abs(px_space[:, None, 1] - palette_hsv[None, :, 1])
-        dv = np.abs(px_space[:, None, 2] - palette_hsv[None, :, 2])
+        for start in range(0, n_pixels, chunk_size):
+            end = min(start + chunk_size, n_pixels)
+            chunk_dh2 = dh2[start:end]
+            chunk_ds2 = ds2[start:end]
+            chunk_dv2 = dv2[start:end]
+            chunk_rgb = orig_rgb[start:end]
+            
+            dist2 = (weights_sq[:, 0, None, None] * chunk_dh2[None, :, :] +
+                     weights_sq[:, 1, None, None] * chunk_ds2[None, :, :] +
+                     weights_sq[:, 2, None, None] * chunk_dv2[None, :, :])
+            
+            best_idx = np.argmin(dist2, axis=2)
+            matched_rgb = palette_rgb[best_idx]
+            rgb_diff = chunk_rgb[None, :, :].astype(np.int16) - matched_rgb.astype(np.int16)
+            errors += np.sum(rgb_diff.astype(np.float64) ** 2, axis=(1, 2))
         
-        # Weighted distance: (N, 147)
-        dist = np.sqrt((w[0] * dh)**2 + (w[1] * ds)**2 + (w[2] * dv)**2)
-        
-        # Find best match for each pixel
-        best_idx = np.argmin(dist, axis=1)  # (N,)
-        matched_rgb = palette_rgb[best_idx]  # (N, 3)
-        
-        # Compute RGB error
-        rgb_diff = orig_rgb - matched_rgb
-        total_error = np.sum(rgb_diff ** 2)
-        return total_error
+        return errors
     
-    # Grid search over weight space
-    h_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
-    s_vals = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
-    v_vals = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+    # === STAGE 1: Coarse search (125 combos) ===
+    h_coarse = np.array([0.5, 1.5, 2.5, 4.0, 5.0], dtype=np.float32)
+    s_coarse = np.array([0.5, 1.5, 2.5, 4.0, 5.0], dtype=np.float32)
+    v_coarse = np.array([1.0, 2.0, 4.0, 6.0, 10.0], dtype=np.float32)
     
-    # Start with defaults
-    default_w = (2.7, 2.2, 8.0) if space == 'hsv' else (0.42, 0.8, 1.5)
-    best_w = list(default_w)
-    best_error = compute_error(best_w)
+    wh, ws, wv = np.meshgrid(h_coarse, s_coarse, v_coarse, indexing='ij')
+    weights_coarse = np.stack([wh.ravel(), ws.ravel(), wv.ravel()], axis=1)
     
-    for h in h_vals:
-        for s in s_vals:
-            for v in v_vals:
-                err = compute_error([h, s, v])
-                if err < best_error:
-                    best_error = err
-                    best_w = [h, s, v]
+    errors_coarse = evaluate_weights(weights_coarse)
+    best_coarse_idx = np.argmin(errors_coarse)
+    best_coarse = weights_coarse[best_coarse_idx]
     
-    avg_error = math.sqrt(best_error / len(orig_rgb))
+    # === STAGE 2: Fine search around best (125 combos with tighter spacing) ===
+    h_fine = np.clip(best_coarse[0] + np.array([-0.5, -0.25, 0, 0.25, 0.5]), 0.1, 10.0).astype(np.float32)
+    s_fine = np.clip(best_coarse[1] + np.array([-0.5, -0.25, 0, 0.25, 0.5]), 0.1, 10.0).astype(np.float32)
+    v_fine = np.clip(best_coarse[2] + np.array([-1.0, -0.5, 0, 0.5, 1.0]), 0.1, 10.0).astype(np.float32)
+    
+    wh, ws, wv = np.meshgrid(h_fine, s_fine, v_fine, indexing='ij')
+    weights_fine = np.stack([wh.ravel(), ws.ravel(), wv.ravel()], axis=1)
+    
+    errors_fine = evaluate_weights(weights_fine)
+    best_fine_idx = np.argmin(errors_fine)
+    best_w = weights_fine[best_fine_idx].tolist()
+    best_error = errors_fine[best_fine_idx]
+    
+    avg_error = math.sqrt(best_error / n_pixels)
     print(f"Auto-matched {space.upper()} weights: ({best_w[0]:.2f}, {best_w[1]:.2f}, {best_w[2]:.2f}) - Avg RGB error: {avg_error:.1f}")
     return tuple(best_w)  # type: ignore
 

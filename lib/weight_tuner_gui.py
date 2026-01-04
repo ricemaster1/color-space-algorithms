@@ -32,11 +32,11 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageTk
 
-# Ensure lib is importable
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+# # Ensure lib is importable
+# _SCRIPT_DIR = Path(__file__).resolve().parent
+# _PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
+# if str(_PROJECT_ROOT) not in sys.path:
+#     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from palette import ARMLITE_RGB, ARMLITE_COLORS, closest_color, color_distance
 
