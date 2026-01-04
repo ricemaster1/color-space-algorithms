@@ -328,7 +328,37 @@ This technique—preserving value while replacing hue and saturation—is exactl
 | `auto_match_weights` | Uses numpy vectorized grid search to find optimal weights that minimize RGB error between original and quantized pixels. Searches over 810 weight combinations and returns the best `(h, s, v)` tuple. |
 | `apply_rgb_to_hsv_hsl` | Resizes the image to `128×96`, walks every pixel, converts it, and picks the closest palette entry via the weighted metric. Returns the grid of ARMLite color names. |
 | `generate_assembly` | Writes the `.Resolution`, `.PixelScreen`, and per-pixel `STR` instructions expected by Peter Higginson's simulator. |
-| `process_image` | Orchestrates the PIL load, resize, conversion, and final write. Supports auto-matching weights when `--auto` is specified. |
+| `generate_truecolor_assembly` | Writes True Color assembly using raw hex values (`0xRRGGBB`) instead of palette names. |
+| `process_image` | Orchestrates the PIL load, resize, conversion, and final write. Supports auto-matching weights when `--auto` is specified, and True Color mode. |
+
+### True Color implementation
+
+The `lib/truecolor.py` module provides utilities for generating True Color assembly:
+
+```python
+from lib.truecolor import rgb_to_hex, generate_truecolor_assembly
+
+# Convert RGB to hex
+hex_color = rgb_to_hex(243, 17, 52)  # Returns "0xF31134"
+
+# Generate assembly from a 2D color grid
+generate_truecolor_assembly(
+    color_grid,           # List[List[Tuple[int,int,int]]]
+    "output.s",           # Output path
+    resolution='hi',      # 'low', 'mid', or 'hi'
+    optimized=True        # Use data loop for smaller file size
+)
+```
+
+The key insight enabling True Color: ARMlite accepts raw hex values via **indirect addressing**:
+
+```asm
+MOV R1, #.PixelScreen    ; Load address into R1
+MOV R0, #0xF31134        ; Any 24-bit color!
+STR R0, [R1]             ; Indirect store works
+```
+
+Direct `STR R0, .PixelScreen` fails with "label out of range" for hex values—you must use the `[R1]` indirection.
 
 Key design notes:
 - The search is brute-force but the palette is only 256 entries, so Python-level loops remain fast (~0.15 s on an M1 for 128×96 inputs).
@@ -341,19 +371,41 @@ Key design notes:
 | Option | Description |
 | --- | --- |
 | `image` | Path to input image (required). Any format PIL can open. |
-| `output` | Assembly output path. Defaults to `converted.s`. If a directory is provided, uses auto-generated filename. |
+| `output` | Assembly output path. Defaults to `converted.s` (palette) or `truecolor.s` (true color). If a directory is provided, uses auto-generated filename. |
 | `-s / --space {hsv,hsl}` | Selects HSV (default) or HSL matching. HSV is better for emissive/glassy looks; HSL balances lightness for flat UI assets. |
-| `-w / --weights H,S,V` | Comma-separated floats controlling the weighting metric. Default: `2.7,2.2,8` for HSV, `0.42,0.8,1.5` for HSL. |
-| `-a / --auto` | **Auto-match weights** to minimize RGB error using numpy vectorized grid search. Overrides `--weights` if both specified. Requires numpy. |
+| `-t / --truecolor` | **True Color mode (default).** Uses full 24-bit RGB—no palette quantization. Outputs exact colors from source image. |
+| `-p / --palette` | **Palette mode.** Quantizes to 147 CSS3 named colors using HSV/HSL weighted matching. |
+| `-w / --weights H,S,V` | [Palette mode only] Comma-separated floats controlling the weighting metric. Default: `2.7,2.2,8` for HSV, `0.42,0.8,1.5` for HSL. |
+| `-a / --auto` | [Palette mode only] **Auto-match weights** to minimize RGB error using numpy vectorized grid search. Requires numpy. |
 
-### Basic usage
+### True Color mode (default)
+
+**New in v2.0:** ARMlite supports full 24-bit RGB colors via hex values like `#0xRRGGBB`. True Color mode bypasses the 147-color palette entirely, giving you **exact color reproduction** from your source image.
 
 ```bash
-# Use default weights for HSV
+# True color output (default)
 python rgb_to_hsv_hsl.py poster.png -o poster.s
 
-# Use HSL with custom weights
-python rgb_to_hsv_hsl.py poster.png --space hsl --weights 0.5,0.8,1.2
+# Explicit true color flag
+python rgb_to_hsv_hsl.py poster.png --truecolor
+```
+
+The generated assembly uses raw hex values:
+```asm
+MOV R0, #0xF31134      ; Exact color from source
+STR R0, [R4]
+```
+
+### Palette mode (147 colors)
+
+For the classic palette-constrained output, use `--palette`:
+
+```bash
+# Palette mode with default weights
+python rgb_to_hsv_hsl.py poster.png --palette -o poster.s
+
+# Palette mode with HSL and custom weights
+python rgb_to_hsv_hsl.py poster.png --palette --space hsl --weights 0.5,0.8,1.2
 ```
 
 ### Auto-matching weights
@@ -382,11 +434,25 @@ Auto-matching uses a vectorized grid search over 810 weight combinations (9×9×
 
 For interactive weight exploration, use the **Weight Tuner GUI** (`weight_tuner_gui.py`) which provides:
 
+- **True Color checkbox**: Toggle between full 24-bit RGB output and 147-color palette
 - **Real-time preview**: Adjust H, S, V/L sliders and see the quantized result instantly
 - **Side-by-side comparison**: Original scaled image next to ARMlite-quantized preview
 - **Auto-match button**: One-click optimization using the same algorithm as `--auto`
 - **Multiple pixel modes**: Support for modes 1–4 (16×12 to 128×96)
 - **Export to assembly**: Save directly to `.s` file with proper pixel mode
+
+### True Color mode in GUI
+
+The **True Color** checkbox (enabled by default) switches between:
+
+| Mode | Preview shows | Export format |
+| --- | --- | --- |
+| ☑️ True Color ON | Original scaled image | Raw hex values (`0xRRGGBB`) |
+| ☐ True Color OFF | Palette-quantized preview | Named CSS3 colors |
+
+When True Color is ON, weight sliders and Auto-Match are disabled—they only apply to palette mode.
+
+> **Important:** In True Color mode, adjusting the weight sliders has **no effect on the preview**. The image shown is always the original source scaled to the target resolution. Weight tuning is only meaningful in palette mode where the weighted distance metric determines color quantization. In True Color mode, the sliders are purely cosmetic (retained for quick comparisons when toggling modes).
 
 ### GUI usage
 
@@ -406,16 +472,51 @@ python weight_tuner_gui.py
 | `Ctrl+S` | Export .s file |
 | `R` | Reset weights to defaults |
 | `1`–`4` | Switch pixel mode |
-
-![Weight Tuner GUI - HSL mode](img/weight_tuner-hsl.png)
-<small>Figure 3: The Weight Tuner GUI showing HSL color space with real-time preview.</small>
+| `T` | Toggle True Color mode |
 
 The GUI is especially useful for:
 - Finding optimal weights for a specific image before batch processing
 - Understanding how different weight combinations affect the output
 - Quick iteration on color matching without command-line cycles
+- **Quick True Color export** when you want exact color reproduction
+
+---
+
+### HSV color space
+
+![Weight Tuner GUI - HSV mode](img/weight_tuner-hsv.png)
+<small>Figure 3: The Weight Tuner GUI showing HSV color space with palette preview.</small>
+
+![GUI with True Color ON (HSV)](img/gui-hsv-truecolor-on.png)
+<small>Figure 3a: HSV True Color mode—shows the original scaled image in the right panel.</small>
+
+![GUI with True Color OFF (HSV)](img/gui-hsv-truecolor-off.png)
+<small>Figure 3b: HSV palette mode—shows quantized preview with weight controls active.</small>
+
+![GUI with True Color OFF, matched (HSV)](img/gui-hsv-truecolor-off-matched.png)
+<small>Figure 3c: HSV palette mode after clicking Auto-Match.</small>
+
+---
+
+### HSL color space
+
+![Weight Tuner GUI - HSL mode](img/weight_tuner-hsl.png)
+<small>Figure 4: The Weight Tuner GUI showing HSL color space with palette preview.</small>
+
+![GUI with True Color ON (HSL)](img/gui-hsl-truecolor-on.png)
+<small>Figure 4a: HSL True Color mode—shows the original scaled image in the right panel.</small>
+
+![GUI with True Color OFF (HSL)](img/gui-hsl-truecolor-off.png)
+<small>Figure 4b: HSL palette mode—shows quantized preview with weight controls active.</small>
+
+![GUI with True Color OFF, matched (HSL)](img/gui-hsl-truecolor-off-matched.png)
+<small>Figure 4c: HSL palette mode after clicking Auto-Match.</small>
+
+---
 
 ### Weight equivalence in discrete palettes
+
+> **Note:** This section only applies to **palette mode**. True Color mode preserves exact RGB values.
 
 An important discovery: **multiple weight combinations can produce identical pixel output**. Because ARMlite's palette contains only 147 discrete colors, different weights that cross the same decision boundaries will map pixels to the same palette entries.
 
@@ -424,7 +525,7 @@ For example, these HSL weights produce visually identical results:
 - `(2.5, 1.5, 6.0)`
 
 ![Weight equivalence demonstration](img/weight_tuner-hsl-fig.2.png)
-<small>Figure 4: Different weight ratios can produce identical quantized output due to the discrete nature of the 147-color palette.</small>
+<small>Figure 5: Different weight ratios can produce identical quantized output due to the discrete nature of the 147-color palette.</small>
 
 This occurs because the weighted distance metric only determines which palette color is *closest*—once a pixel crosses the decision boundary to a particular palette entry, the exact weight values no longer matter. This has practical implications:
 
@@ -437,6 +538,8 @@ This is a natural consequence of quantization to a limited palette—the continu
 ---
 
 ## Weighting playbook
+
+> **Tip:** If exact color reproduction matters more than file size, skip weights entirely and use **True Color mode** (`--truecolor`). The weights below are for **palette mode** (`--palette`) when you need the 147-color constraint.
 
 > **Note:** These are starting-point weights—due to [weight equivalence](#weight-equivalence-in-discrete-palettes), other ratios may produce identical output. Use `--auto` or the GUI to find alternatives optimized for your specific image.
 
@@ -462,23 +565,27 @@ Tune weights with fractional steps (e.g., increments of `0.1`). The metric squar
 ---
 
 ## Pipeline ideas
-1. **Quick auto-matched sprite**
-   - `rgb_to_hsv_hsl.py frame.png --auto` — let the algorithm find optimal weights
+1. **Exact True Color sprite**
+   - `rgb_to_hsv_hsl.py sprite.png` — default True Color mode
+   - Best for: pixel art, photographs, any image where exact colors matter
+2. **Quick auto-matched sprite** (palette mode)
+   - `rgb_to_hsv_hsl.py frame.png --palette --auto` — let the algorithm find optimal weights
    - Best for: rapid prototyping, batch processing diverse images
-2. **Hue-protected anime frame**
-   - `rgb_to_hsv_hsl.py frame.png --space hsv --weights 3,1,0.6`
+3. **Hue-protected anime frame** (palette mode)
+   - `rgb_to_hsv_hsl.py frame.png --palette --space hsv --weights 3,1,0.6`
    - `distance_delta_e.py --metric ciede2000`
    - `floyd-steinberg.py` for fast halftones.
-3. **Pastel UI card**
-   - `rgb_to_hsv_hsl.py card.png --space hsl --weights 0.6,0.5,1.9`
+4. **Pastel UI card** (palette mode)
+   - `rgb_to_hsv_hsl.py card.png --palette --space hsl --weights 0.6,0.5,1.9`
    - `median_cut.py -c 32`
    - `atkinson.py` for soft diffusion.
-4. **Specular metal study**
-   - `rgb_to_hsv_hsl.py mech.png --space hsv --weights 1.5,1.5,1.5`
+5. **Specular metal study** (palette mode)
+   - `rgb_to_hsv_hsl.py mech.png --palette --space hsv --weights 1.5,1.5,1.5`
    - `wu_quantizer.py`
    - `sierra.py --variant sierra-lite` to reduce worm artifacts.
-5. **Interactive tuning workflow**
+6. **Interactive tuning workflow**
    - Use `weight_tuner_gui.py` to find optimal weights visually
+   - Toggle True Color checkbox to compare exact vs. palette output
    - Export directly from GUI, or note the weights for batch scripting
 
 Document pipelines in `docs/pipelines.md` as you validate them so others can reproduce the recipe.
@@ -490,18 +597,21 @@ Document pipelines in `docs/pipelines.md` as you validate them so others can rep
 ---
 
 ## Testing & validation checklist
+- Run with both `--truecolor` (default) and `--palette` modes to verify both output formats.
 - Run with both `--space hsv` and `--space hsl` on the same asset to ensure parameter parsing works.
 - Feed intentionally bad `--weights` (non-numeric, wrong length) to confirm the CLI rejects them before processing.
 - Verify generated assembly loads in the ARMLite simulator (`Load → Assemble → Run`) without warnings.
+- For True Color output, verify hex colors render correctly (requires indirect addressing).
 - Spot-check palette matching by logging `best_name` (add a temporary print) for tricky gradients.
 
 ---
 
 ## Troubleshooting
-- **Banding remains after conversion:** Lower the value/lightness weight so hue drives the match, then add diffusion in `dithers/` scripts.
-- **Output looks washed out:** Switch to `--space hsv` and increase the saturation weight; HSL tends to desaturate mid-tones.
+- **Banding remains after conversion:** Lower the value/lightness weight so hue drives the match, then add diffusion in `dithers/` scripts. Or use **True Color mode** for exact reproduction.
+- **Output looks washed out:** Switch to `--space hsv` and increase the saturation weight; HSL tends to desaturate mid-tones. Or use **True Color mode**.
 - **File not found errors:** The script expects paths relative to the repo root; use absolute paths or quote filenames with spaces.
 - **Performance concerns:** Crop large source art before conversion; resizing down to 128×96 avoids wasted work and clarifies the final sprite early.
+- **True Color assembly errors:** If you see "label out of range" when running True Color output, ensure you're using the correct `STR R0, [R4]` indirect addressing pattern, not direct `STR R0, .PixelScreen`.
 
 ---
 
