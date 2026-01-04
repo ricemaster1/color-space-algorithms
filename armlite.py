@@ -15,6 +15,9 @@ from typing import Optional, Set
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+LIB_ROOT = PROJECT_ROOT / 'lib'
+if str(LIB_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIB_ROOT))
 SCRIPTS_ROOT = PROJECT_ROOT / 'algorithms'
 
 from rename_utils import GUI_AVAILABLE as GUI_RENAME_AVAILABLE

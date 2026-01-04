@@ -322,7 +322,9 @@ if __name__ == '__main__':
         description='RGB→HSV/HSL workflow renderer for ARMLite sprites. Uses true color (24-bit RGB) by default.'
     )
     parser.add_argument('image', help='Path to input image')
-    parser.add_argument('output', nargs='?', default='converted.s', help='Output assembly file path (default: converted.s)')
+    parser.add_argument('output', nargs='?', default=None, help='Output assembly file path (default: auto-generated)')
+    parser.add_argument('-o', '--output-file', dest='output_file', default=None,
+        help='Output assembly file path (alternative to positional argument)')
     parser.add_argument('-s','--space', choices=['hsv', 'hsl'], default='hsv', help='Color space to use for matching (default: hsv)')
     
     # Color mode: truecolor (default) vs palette
@@ -379,8 +381,8 @@ if __name__ == '__main__':
     else:
         default_filename = f'{args.space}_{weights[0]}_{weights[1]}_{weights[2]}.s'
     
-    # If output is a directory, save with appropriate filename inside it
-    output_path = args.output
+    # Determine output path: -o flag takes precedence over positional argument
+    output_path = args.output_file if args.output_file else args.output
     if output_path:
         output_path = os.path.expanduser(output_path)
         if os.path.isdir(output_path):
