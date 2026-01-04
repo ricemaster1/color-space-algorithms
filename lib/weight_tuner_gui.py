@@ -187,7 +187,7 @@ class ARMliteStyleApp:
         self.root.bind('<Control-o>', lambda e: self._browse_image())
         self.root.bind('<Control-s>', lambda e: self._export_assembly())
         self.root.bind('<Control-p>', lambda e: self._export_preview())
-        self.root.bind('<Control-Shift-s>', lambda e: self._export_both())
+        self.root.bind('<Control-b>', lambda e: self._export_both())
         self.root.bind('<r>', lambda e: self._reset_weights())
         self.root.bind('<R>', lambda e: self._reset_weights())
         for mode in PIXEL_MODES:
@@ -390,14 +390,14 @@ class ARMliteStyleApp:
             activebackground=COLORS['accent2'], activeforeground=COLORS['button_fg'],
             font=('Helvetica', 11))
         self.export_menu.add_command(
-            label="Assembly (.s)          Ctrl+S",
+            label="Assembly (.s)           Ctrl+S",
             command=self._export_assembly)
         self.export_menu.add_command(
             label="Preview PNG            Ctrl+P",
             command=self._export_preview)
         self.export_menu.add_separator()
         self.export_menu.add_command(
-            label="Both (.s + PNG)   Ctrl+Shift+S",
+            label="Both (.s + PNG)        Ctrl+B",
             command=self._export_both)
         
         export_btn = ttk.Menubutton(
