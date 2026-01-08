@@ -90,28 +90,35 @@ Head to the docs page for math references, output previews, and automation tips 
 	- Click **Code → Download ZIP**
 	- Extract and navigate to the `algorithms` folder
 
-2. **Install Python 3.10+** if you don't have it:
-	- **macOS**: `brew install python@3.10` or download from [python.org](https://www.python.org/downloads/)
-	  <details>
-	  <summary><strong>🔧 Install Homebrew if needed</strong></summary>
 
-	  ```bash
-	  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-	  ```
-	  Then follow the instructions to add brew to your PATH. See [brew.sh](https://brew.sh/) for more info.
 
-	  </details>
-	- **Windows**: Download from [python.org](https://www.python.org/downloads/) — check "Add Python to PATH" during install
-	- **Linux**:
-		- Debian/Ubuntu: `sudo apt install python3.10 python3.10-venv`
-		- Arch/Manjaro: `sudo pacman -S python`
-		- Fedora: `sudo dnf install python3.10`
-		- RHEL/CentOS: `sudo dnf install python3.10` (enable EPEL if needed)
-		- openSUSE: `sudo zypper install python310`
-		- Void: `sudo xbps-install python3`
-		- Gentoo: `sudo emerge -av dev-lang/python:3.10`
-		- Alpine: `sudo apk add python3`
-		- NixOS: `nix-env -iA nixpkgs.python310` or add to `configuration.nix`
+2. **Install Python 3.10+** (only needed if you use pip + direnv):
+	 - If you plan to use pip + direnv, you must have Python 3.10+ installed on your system:
+		 - **macOS**: `brew install python@3.10` or download from [python.org](https://www.python.org/downloads/)
+			 <details>
+			 <summary><strong>🔧 Install Homebrew if needed</strong></summary>
+
+			 ```bash
+			 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+			 ```
+			 Then follow the instructions to add brew to your PATH. See [brew.sh](https://brew.sh/) for more info.
+
+			 </details>
+		 - **Windows**: Download from [python.org](https://www.python.org/downloads/) — check "Add Python to PATH" during install
+		 - **Linux**: Most distributions come with a system Python, but you may need to install python3.10 and python3.10-venv for full compatibility:
+				 - Debian/Ubuntu: `sudo apt install python3.10 python3.10-venv`
+				 - Arch/Manjaro: `sudo pacman -S python`
+				 - Fedora: `sudo dnf install python3.10`
+				 - RHEL/CentOS: `sudo dnf install python3.10` (enable EPEL if needed)
+				 - openSUSE: `sudo zypper install python310`
+				 - Void: `sudo xbps-install python3`
+				 - Gentoo: `sudo emerge -av dev-lang/python:3.10`
+				 - Alpine: `sudo apk add python3`
+				 - NixOS: `nix-env -iA nixpkgs.python310` or add to `configuration.nix`
+
+	 - **Note:** Linux and macOS typically come with a system Python pre-installed. Windows users must install Python manually.
+
+	 - If you use pyenv or conda, you do NOT need to install python3.10 system-wide. These environment managers will handle Python installation for you.
 
 3. <details>
 	<summary><strong>🔧 Installing environment managers</strong></summary>
@@ -119,10 +126,20 @@ Head to the docs page for math references, output previews, and automation tips 
 	**Conda (recommended)** — handles Python versions and packages in one tool:
 	- Download [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/download)
 	
-	**pyenv** — manages multiple Python versions (macOS/Linux only):
-	- macOS: `brew install pyenv`
-	- Linux: `curl https://pyenv.run | bash` (then add to shell config)
-	- See [pyenv installer](https://github.com/pyenv/pyenv-installer)
+
+
+	**pip + direnv (recommended for most users)** — simple, reliable, and works everywhere:
+		- Use the standard Python venv and pip for dependencies
+		- Use direnv to auto-activate your environment per directory
+		- No need for pyenv or pyenv-virtualenv unless you need to manage multiple Python versions system-wide
+
+
+	**pyenv** — manages multiple Python versions:
+		- macOS: `brew install pyenv`
+		- Linux: `curl https://pyenv.run | bash` (then add to shell config)
+		- Windows: [pyenv-win](https://github.com/pyenv-win/pyenv-win) is available for managing Python versions on Windows. Install via `pip install pyenv-win --target %USERPROFILE%\.pyenv` or follow the instructions in the repo.
+		- See [pyenv installer](https://github.com/pyenv/pyenv-installer) and [pyenv-win](https://github.com/pyenv-win/pyenv-win)
+		- Note: pyenv (macOS/Linux) and pyenv-win (Windows) are separate projects. pyenv-win does not support all features of pyenv, and may not integrate with direnv or virtualenv in the same way. Use only if you need to switch Python versions globally or per shell on Windows.
 	
 	**direnv** — auto-activates environments per directory:
 	- macOS: `brew install direnv`
@@ -137,33 +154,103 @@ Head to the docs page for math references, output previews, and automation tips 
 
 	</details>
 
+
 3. Create and activate a Python 3.10 environment using your preferred workflow:
-	```bash
-	# stdlib venv (macOS/Linux)
-	python3 -m venv .venv
-	source .venv/bin/activate
 
-	# stdlib venv (Windows CMD)
-	python -m venv .venv
-	.venv\Scripts\activate.bat
+```bash
+# stdlib venv (macOS/Linux)
+python3 -m venv .venv
+source .venv/bin/activate
 
-	# stdlib venv (Windows PowerShell)
-	python -m venv .venv
-	.venv\Scripts\Activate.ps1
+# stdlib venv (Windows CMD)
+python -m venv .venv
+.venv\Scripts\activate.bat
 
-	# pyenv + direnv (macOS/Linux)
-	pyenv virtualenv 3.10 armlite-algos
-	echo "layout python python3" > .envrc
-	direnv allow
+# stdlib venv (Windows PowerShell)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
 
-	# conda (all platforms) — recommended
-	conda create -n armlite-algos python=3.10
-	conda activate armlite-algos
-	```
+
+**Shell Configuration for pyenv and direnv (macOS/Linux):**
+
+Add the following lines to your `~/.zshrc` or `~/.bashrc` (or `~/.config/fish/config.fish` for fish):
+
+```sh
+# pyenv setup
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+# If using pyenv-virtualenv:
+eval "$(pyenv virtualenv-init -)"
+
+# direnv setup 
+eval "$(direnv hook zsh)"  # or bash/fish as appropriate
+```
+
+After editing your shell config, restart your terminal or run `source ~/.zshrc` (or `source ~/.bashrc`).
+
+If you use Conda, run `conda init zsh` (or `conda init bash` / `conda init fish`) once to enable shell integration, then restart your terminal. This configures `conda activate` for your shell so direnv's `use conda` will work smoothly.
+
+**pyenv + direnv (macOS/Linux):**
+
+
+There are three common workflows for using direnv and Python environments. Here are concrete .envrc examples for each:
+
+**A. pyenv-virtualenv (recommended for reproducibility):**
+
+```bash
+# Install Python and create a virtualenv (replace 3.10.11 with your installed version):
+pyenv install 3.10.11  # if not already installed
+pyenv virtualenv 3.10.11 armlite-algos
+pyenv local armlite-algos  # sets .python-version for this directory
+
+# .envrc
+layout python ~/.pyenv/versions/armlite-algos/bin/python
+# or, if you want to use the local version automatically:
+# layout python $(pyenv which python)
+```
+Run `direnv allow` after creating or editing .envrc. This ensures direnv always uses the correct pyenv-managed Python. You can check which Python is active with `which python` or `python --version`.
+
+**B. layout python (simple, but less reproducible):**
+
+```bash
+# .envrc
+layout python python3
+```
+This will create a `.direnv` virtual environment using the first `python3` in your PATH (which may be a system or pyenv Python). To force a specific version, set it with `pyenv local 3.10.11` before running `direnv allow`.
+
+**C. Conda (all platforms):**
+
+```bash
+# .envrc
+use conda armlite-algos
+```
+Or activate manually:
+```bash
+conda create -n armlite-algos python=3.10
+conda activate armlite-algos
+```
+For more, see the direnv [conda integration docs](https://direnv.net/docs/allow.html#conda).
+
+---
+
+
+**Best Practices & Troubleshooting:**
+
+- Always add `eval "$(direnv hook zsh)"` (or bash/fish) to your shell config.
+- If `pyenv virtualenv-init` is not found, ensure pyenv-virtualenv is installed and your shell config sources its init script.
+- If direnv is not auto-activating/deactivating, check that your shell is loading the direnv hook and that `.envrc` exists and is allowed.
+- To avoid confusion, prefer explicit Python paths in `.envrc` when using pyenv-virtualenv.
+- Use `pyenv which python` or `pyenv which pip` to confirm the Python interpreter being used.
+- If you see the wrong Python version, check your shell's PATH and pyenv global/local settings.
+
+For more, see [direnv.net](https://direnv.net/) and [pyenv wiki](https://github.com/pyenv/pyenv/wiki/Common-build-problems).
 
 4. Install dependencies:
 	```bash
-	# pip or pyenv + direnv
+	# pyenv or pip + direnv
 	pip install -r requirements.txt
 
 	# conda 

@@ -1,0 +1,163 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- saved from url=(0045)http://www.brucelindbloom.com/Navigation.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    <title>Navigation</title>
+    <script language="javascript" type="text/javascript">
+      <!--
+
+        if (document.images) {
+          but0On = new Image
+          but1On = new Image
+          but2On = new Image
+          but3On = new Image
+          but4On = new Image
+          but5On = new Image
+
+          but0Off = new Image
+          but1Off = new Image
+          but2Off = new Image
+          but3Off = new Image
+          but4Off = new Image
+          but5Off = new Image
+
+          but0Over = new Image
+          but1Over = new Image
+          but2Over = new Image
+          but3Over = new Image
+          but4Over = new Image
+          but5Over = new Image
+
+          but0On.src = "images/On0.gif"
+          but1On.src = "images/On1.gif"
+          but2On.src = "images/On2.gif"
+          but3On.src = "images/On3.gif"
+          but4On.src = "images/On4.gif"
+          but5On.src = "images/On5.gif"
+        
+          but0Off.src = "images/Off0.gif"
+          but1Off.src = "images/Off1.gif"
+          but2Off.src = "images/Off2.gif"
+          but3Off.src = "images/Off3.gif"
+          but4Off.src = "images/Off4.gif"
+          but5Off.src = "images/Off5.gif"
+        
+          but0Over.src = "images/Over0.gif"
+          but1Over.src = "images/Over1.gif"
+          but2Over.src = "images/Over2.gif"
+          but3Over.src = "images/Over3.gif"
+          but4Over.src = "images/Over4.gif"
+          but5Over.src = "images/Over5.gif"
+        
+          var currPage = "but0";
+        }
+    
+        function resetAll(onName) {
+          if (parent.navigation.document.images) {
+            parent.navigation.document.but0.src = but0Off.src
+            parent.navigation.document.but1.src = but1Off.src
+            parent.navigation.document.but2.src = but2Off.src
+            parent.navigation.document.but3.src = but3Off.src
+            parent.navigation.document.but4.src = but4Off.src
+            parent.navigation.document.but5.src = but5Off.src
+            
+            currPage = onName;
+            parent.navigation.document[onName].src = eval(onName+"On.src")
+          }
+        }
+    
+        function imgOver(onName) {
+          if (document.images && (onName != currPage)) {
+            document[onName].src = eval(onName+"Over.src")
+          }
+        }
+    
+        function imgOut(onName) {
+          if (document.images && (onName != currPage)) {
+            document[onName].src = eval(onName+"Off.src")
+          }
+        }
+
+        function loadTwoFrames(contentFile) {
+	  parent.content.document.location.href = contentFile + ".html"
+	}
+
+	function placeButton(hName,butNo) {
+	  if (butNo == 0)
+	    document.write('<img src="images\/On' + butNo + '.gif" width="154" height="140" border="0" hspace="0" vspace="0" name="but' + butNo + '" alt="' + hName + '" usemap="#button' + butNo + 'Map">')
+	  else
+	    document.write('<img src="images\/Off' + butNo + '.gif" width="76" height="140" border="0" hspace="0" vspace="0" name="but' + butNo + '" alt="' + hName + '" usemap="#button' + butNo + 'Map">')
+	}
+      // -->
+    </script>
+    <meta name="AUTHOR" content="Bruce Justin Lindbloom">
+    <meta name="DESCRIPTION" content="Interesting things for digital imaging and color science.">
+    <meta name="KEYWORDS" content="color, color science, imaging, digital imaging, CIE">
+  </head>
+
+  <body bgcolor="White" style="margin: 0" marginwidth="0" marginheight="0">
+
+    <map name="button0Map">
+      <area shape="CIRCLE" coords="69,71,63" alt="Home Page" href="javascript:loadTwoFrames(&#39;Home&#39;)" onmouseover="imgOver(&#39;but0&#39;)" onmouseout="imgOut(&#39;but0&#39;)" onclick="resetAll(&#39;but0&#39;)">
+    </map>
+    <map name="button1Map">
+      <area shape="RECT" coords="4,91,72,121" alt="Calculators" href="javascript:loadTwoFrames(&#39;Calc&#39;)" onmouseover="imgOver(&#39;but1&#39;)" onmouseout="imgOut(&#39;but1&#39;)" onclick="resetAll(&#39;but1&#39;)">
+    </map>
+    <map name="button2Map">
+      <area shape="RECT" coords="4,91,72,121" alt="Information" href="javascript:loadTwoFrames(&#39;Info&#39;)" onmouseover="imgOver(&#39;but2&#39;)" onmouseout="imgOut(&#39;but2&#39;)" onclick="resetAll(&#39;but2&#39;)">
+    </map>
+    <map name="button3Map">
+      <area shape="RECT" coords="4,91,72,121" alt="Mathematics" href="javascript:loadTwoFrames(&#39;Math&#39;)" onmouseover="imgOver(&#39;but3&#39;)" onmouseout="imgOut(&#39;but3&#39;)" onclick="resetAll(&#39;but3&#39;)">
+    </map>
+    <map name="button4Map">
+      <area shape="RECT" coords="4,91,72,121" alt="Links" href="javascript:loadTwoFrames(&#39;Links&#39;)" onmouseover="imgOver(&#39;but4&#39;)" onmouseout="imgOut(&#39;but4&#39;)" onclick="resetAll(&#39;but4&#39;)">
+    </map>
+    <map name="button5Map">
+      <area shape="RECT" coords="4,91,72,121" alt="Miscellaneous" href="javascript:loadTwoFrames(&#39;Misc&#39;)" onmouseover="imgOver(&#39;but5&#39;)" onmouseout="imgOut(&#39;but5&#39;)" onclick="resetAll(&#39;but5&#39;)">
+    </map>
+
+    <script language="javascript" type="text/javascript">
+      <!--
+	document.write('<table align="LEFT" bgcolor="#FFFFFF" border="0" cellpadding="0" cellspacing="0" rules="NONE" width="2536" frame="VOID" hspace="0" summary="Banner">')
+
+	document.write('<tr>')
+	document.write('<td>')
+	placeButton("Home",0)
+	document.write('<\/td>')
+	document.write('<td>')
+	placeButton("Calc",1)
+	document.write('<\/td>')
+	document.write('<td>')
+	placeButton("Info",2)
+	document.write('<\/td>')
+	document.write('<td>')
+	placeButton("Math",3)
+	document.write('<\/td>')
+	document.write('<td>')
+	placeButton("Links",4)
+	document.write('<\/td>')
+	document.write('<td>')
+	placeButton("Misc",5)
+	document.write('<\/td>')
+	document.write('<td>')
+	document.write('<img src="images/BannerC7.gif" width="2002" height="140" border="0" hspace="0" vspace="0">')
+	document.write('<\/td>')
+	document.write('<\/tr>')
+	
+	document.write('<\/table>')
+      // -->
+    </script><table align="LEFT" bgcolor="#FFFFFF" border="0" cellpadding="0" cellspacing="0" rules="NONE" width="2536" frame="VOID" hspace="0" summary="Banner"><tbody><tr><td><img src="./On0.gif" width="154" height="140" border="0" hspace="0" vspace="0" name="but0" alt="Home" usemap="#button0Map"></td><td><img src="./Off1.gif" width="76" height="140" border="0" hspace="0" vspace="0" name="but1" alt="Calc" usemap="#button1Map"></td><td><img src="./Off2.gif" width="76" height="140" border="0" hspace="0" vspace="0" name="but2" alt="Info" usemap="#button2Map"></td><td><img src="./Off3.gif" width="76" height="140" border="0" hspace="0" vspace="0" name="but3" alt="Math" usemap="#button3Map"></td><td><img src="./Off4.gif" width="76" height="140" border="0" hspace="0" vspace="0" name="but4" alt="Links" usemap="#button4Map"></td><td><img src="./Off5.gif" width="76" height="140" border="0" hspace="0" vspace="0" name="but5" alt="Misc" usemap="#button5Map"></td><td><img src="./BannerC7.gif" width="2002" height="140" border="0" hspace="0" vspace="0"></td></tr></tbody></table>
+  <!-- WiredMinds eMetrics tracking with Enterprise Edition V5.4 START -->
+<script type="text/javascript" src="https://count.carrierzone.com/app/count_server/count.js"></script>
+<script type="text/javascript"><!--
+wm_custnum='95a451a4b38981e7';
+wm_page_name='Navigation.html';
+wm_group_name='/services/webpages/b/r/brucelindbloom.com/public';
+wm_campaign_key='campaign_id';
+wm_track_alt='';
+wiredminds.count();
+// -->
+</script>
+<!-- WiredMinds eMetrics tracking with Enterprise Edition V5.4 END -->
+
+
+</body></html>

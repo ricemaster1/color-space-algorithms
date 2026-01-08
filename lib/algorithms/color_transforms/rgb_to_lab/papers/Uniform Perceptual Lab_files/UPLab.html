@@ -1,0 +1,114 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- saved from url=(0040)http://www.brucelindbloom.com/UPLab.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    <title>Uniform Perceptual Lab</title>
+    <script src="./loadFrames.js" language="javascript" type="text/javascript"></script>
+    <meta name="AUTHOR" content="Bruce Justin Lindbloom">
+    <meta name="DESCRIPTION" content="Uniform Perceptual Lab">
+    <meta name="KEYWORDS" content="color, Lab, uniform perceptual">
+    <link rel="stylesheet" href="./default.css" type="text/css">
+  </head>
+
+  <body onload="parent.navigation.resetAll(&#39;but2&#39;)" marginwidth="25" marginheight="5">
+
+    <h1 align="CENTER">Uniform Perceptual Lab</h1>
+
+    <p>Gamut mapping of colors generally involves finding substitute colors that "look like" the desired color. Profile
+    creation software commonly performs these substitutions by moving the out-of-gamut color along a line of constant
+    Lab hue angle. But experiments and experience have shown that colors sharing the same Lab hue angle do always not share
+    the same apparent hue. The result is that a substituted color may have a completely different apparent hue than
+    the original color had. A notorious example is the "blue turns purple" problem.</p>
+
+    <p>This should not be blamed on Lab, since that color space was designed to measure color differences. It was not designed to have
+    the perceptual qualities needed for gamut mapping. Its use for this purpose is really a misuse, resulting
+    primarily from a lack of a better alternative.</p>
+
+    <p>The Munsell data set is often used to evaluate the perceptual qualities of color spaces. When viewing the Munsell colors in Lab you can plainly
+    see that colors of constant apparent hue do not lie on a line or plane. Furthermore, the angles between
+    hues are not equal, and colors of constant chroma are not equidistant from the neutral axis. It would be very helpful if there
+    was a formula for convering from the CIE system into a color space that had uniform perceptual properties. Unfortunately, there are
+    no such formulas. The only recourse is to use multi-dimensional look up tables. An ICC profile may contain this type of look up table, and
+    therefore becomes a candidate for an implementation of this color space transformation.</p>
+
+    <p>In an effort to advance this particular need of the color reproduction community, I have prepared a color space ICC profile that performs the
+    desired nonlinear mapping of Lab so that all properties of the Munsell color set are met. By that I mean that when <b>CIE Lab</b> colors
+    are transformed through this Lab-to-Lab profile, the resulting <b>Uniform Perceptual Lab</b> (or "<b>UP Lab</b>") colors have
+    these properties:</p>
+
+    <ul>
+      <li><p>All colors of constant Munsell hue have the same <b>UP Lab</b> hue angle. Another way of saying this is
+      that all colors of the same Munsell hue designation will lie on a half-plane passing through the neutral axis.</p></li>
+
+      <li><p>All Munsell hues are evenly distributed around the hue wheel. Since there are 40 different hues in the Munsell set, there
+      is a nine-degree angle between any adjacent pair of Munsell hues.</p></li>
+
+      <li><p>All colors of constant Munsell chroma (saturation) lie the same distance from the neutral axis (i.e. they
+      have the same chroma in <b>UP Lab</b> space). Another way of saying this is that chroma rings are perfect circles,
+      centered on neutral. When taken collectively at different lightness values, all colors of constant chroma lie on the surface
+      of a circular cylinder parallel to, and centered along the neutral axis.</p></li>
+
+      <li><p>All chroma rings are equally spaced. There is a 5 &#916;E (per Munsell chroma unit) spacing between adjacent Munsell
+      chroma rings.</p></li>
+    </ul>
+
+    <p>These are all desirable attributes of a uniform perceptual color space. They are
+    illustrated below. On the left are the Munsell colors after adapting to D50 (the Munsell Display Calculator uses the unadapted,
+    Illuminant C values).</p>
+
+    <center><img src="./UPLab_Views_D50.gif" width="768" height="445" alt="UPLab Views"></center>
+
+    <p>The mapping was done such that Munsell hue 2.5RP has a <b>UP Lab</b> hue angle of zero degrees. This particular rotation was
+    chosen to allow greater chroma encoding of blue colors in the lower right quadrant of the a/b plane. Furthermore, the mapping
+    does not affect the L* channel, nor any neutral colors. For this exercise, I used the Illuminant C Munsell data from file <tt>all.dat</tt> found at
+    <a href="http://www.cis.rit.edu/research/mcsl2/online/munsell.php" target="_blank">http://www.cis.rit.edu/research/mcsl2/online/munsell.php</a>. These 4996
+    colors were adapted from Illuminant C to D50 using the Bradford chromatic adaptation algorithm. These data were then interpolated and
+    extrapolated to arrive at the look up tables in the profile.</p>
+
+    <p>The A2B0 tag of the profile converts from <b>CIE Lab</b> to <b>UP Lab</b>. The B2A0 tag performs the inverse
+    transformation. The idea is that a developer of profiling software (or a CMM) may use the profile to temporarily transform <b>CIE Lab</b> into
+    <b>UP Lab</b>, perform the gamut mapping substitution, and then transform the mapped color back to <b>CIE Lab</b>. In this
+    way, a linear gamut mapping in <b>UP Lab</b> is equivalent to a nonlinear mapping along the curved Munsell lines in <b>CIE Lab</b>. This
+    should fix, or at least greatly reduce the "blue turns purple" problem. Granted, the Munsell data set was generated to an Illuminant C environment
+    and the ICC architecture is based on D50. Nevertheless, given the observation that the adapted Illuminant C Munsell data demonstrate observed
+    effects in D50, the correction transformation is probably applicable.</p>
+
+    <p>Note that this profile is probably useful only to software developers. It will be difficult to find any
+    end-user software that can make use of a "color space" type of ICC profile.</p>
+
+    <h2>Permitted Uses</h2>
+
+    <p>This profile may be used for any commercial or non-commercial purposes, including redistribution, provided that the copyright
+    tag remains unchanged in the profile, and that any distributions of embodiments or derivatives using the profile or resulting
+    from the use of the profile contain the following statement in its documentation:</p>
+
+    <blockquote>CIE Lab to Uniform Perceptual Lab profile is copyright © 2003 Bruce Justin Lindbloom. All rights reserved.
+    &lt;http://www.brucelindbloom.com&gt;</blockquote>
+
+    <h2>Download the Uniform Perceptual Lab Profile</h2>
+
+    <p>You may download the Uniform Perceptual Lab ICC profile here
+    in <a href="http://www.brucelindbloom.com/downloads/CIELab_to_UPLab.icc.zip">zip</a> (1.2 Mb) format.</p>
+
+    <p><b>Note:</b> Marti Maria, author of <a href="http://www.littlecms.com/" target="_blank">LittleCMS</a>,
+    <a href="http://www.mail-archive.com/lcms-user@lists.sourceforge.net/msg01271.html" target="_blank">informed me</a>
+    that the A2B0 and B2A0 tags are swapped in the UPLab profile. I have created an exact copy, but with these two tags reversed. This
+    version may be downloaded in either <a href="http://www.brucelindbloom.com/downloads/CIELab_to_UPLab2.icc.zip">zip</a> (1.2 Mb)
+    or <a href="http://www.brucelindbloom.com/downloads/CIELab_to_UPLab2.icc.sit">sit</a> (1.3 Mb) format. Thanks Marti!</p>
+
+    <script src="./footer.js" language="javascript" type="text/javascript"></script><hr><table width="100%" summary="footer" cellspacing="0" cellpadding="0">  <tbody><tr>    <td align="LEFT"><a href="javascript:window.scroll(0,0)">Top of Page</a></td>    <td align="RIGHT"></td>  </tr>  <tr>    <td align="LEFT">      Revised Fri, 07 Apr 2017 00:01:31 GMT    </td>    <td align="RIGHT">URL: <a href="http://www.brucelindbloom.com/">http://www.brucelindbloom.com</a></td>  </tr>  <tr>    <td colspan="2" align="CENTER">All material on this web site is Copyright © 2001 - 2026 Bruce Justin Lindbloom. All Rights Reserved.</td>  </tr></tbody></table>
+
+  <!-- WiredMinds eMetrics tracking with Enterprise Edition V5.4 START -->
+<script type="text/javascript" src="https://count.carrierzone.com/app/count_server/count.js"></script>
+<script type="text/javascript"><!--
+wm_custnum='95a451a4b38981e7';
+wm_page_name='UPLab.html';
+wm_group_name='/services/webpages/b/r/brucelindbloom.com/public';
+wm_campaign_key='campaign_id';
+wm_track_alt='';
+wiredminds.count();
+// -->
+</script>
+<!-- WiredMinds eMetrics tracking with Enterprise Edition V5.4 END -->
+
+
+</body></html>
