@@ -1,8 +1,8 @@
 # Directories 
 old/
-tests/
-debug/
-algorithms/truecolor/
+dev/
+build/
+source/algorithms/lib/
 
 # macOS
 .DS_Store
