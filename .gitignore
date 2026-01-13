@@ -2,7 +2,6 @@
 old/
 dev/
 build/
-source/algorithms/lib/
 
 # macOS
 .DS_Store
