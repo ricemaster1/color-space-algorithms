@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "armlite-toolkit"
+version = "0.1.0"
+description = "Modular Python toolkit for converting images to ARMLite sprite assembly"
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=10.0.0",
+    "webcolors>=1.13",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "matplotlib>=3.7.0",
+    "spectra>=0.0.11",
+]
+
+[project.scripts]
+armlite = "armlite:main"
+
+[tool.setuptools.packages.find]
+include = ["lib*"]

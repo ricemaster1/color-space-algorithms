@@ -13,7 +13,7 @@ and error-diffusion dithering through a single CLI entry point.
 
 ```bash
 # Set up the environment (see setup.md for full OS-specific instructions)
-pip install -r requirements.txt
+pip install -e .
 
 # Convert a directory of images to ARMLite assembly
 python armlite.py convert images/ -O output/ -a median_cut --preview
@@ -120,7 +120,7 @@ published to **GitHub Pages**:
 Install everything:
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ---

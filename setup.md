@@ -61,9 +61,9 @@ python --version
 
 **Step 5:** Install requirements:
 ```powershell
-pip install -r requirements.txt
+pip install -e .
 # or
-conda install --yes --file requirements.txt -c conda-forge
+conda install --yes --file requirements.txt -c conda-forge && pip install -e . --no-deps
 ```
 
 **Step 6:** Finished.
@@ -146,11 +146,11 @@ python -c "import sys; print(sys.executable)"
 
 **Step 5:** Install requirements:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 # or
-mamba install --yes --file requirements.txt -c conda-forge
+mamba install --yes --file requirements.txt -c conda-forge && pip install -e . --no-deps
 # or
-conda install --yes --file requirements.txt -c conda-forge
+conda install --yes --file requirements.txt -c conda-forge && pip install -e . --no-deps
 ```
 
 **Step 6:** Finished.
@@ -234,11 +234,11 @@ python -c "import sys; print(sys.executable)"
 
 **Step 5:** Install requirements:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 # or
-mamba install --yes --file requirements.txt -c conda-forge
+mamba install --yes --file requirements.txt -c conda-forge && pip install -e . --no-deps
 # or
-conda install --yes --file requirements.txt -c conda-forge
+conda install --yes --file requirements.txt -c conda-forge && pip install -e . --no-deps
 ```
 
 **Step 6:** Finished.

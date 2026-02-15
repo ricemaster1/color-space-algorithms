@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 LIB_ROOT = PROJECT_ROOT / 'lib'
 if str(LIB_ROOT) not in sys.path:
     sys.path.insert(0, str(LIB_ROOT))
-SCRIPTS_ROOT = PROJECT_ROOT / 'algorithms'
+SCRIPTS_ROOT = PROJECT_ROOT / 'lib' / 'algorithms'
 
 from rename_utils import GUI_AVAILABLE as GUI_RENAME_AVAILABLE
 from rename_utils import launch_gui as rename_launch_gui
@@ -59,12 +59,18 @@ def _discover_external_algorithms(root: Path, reserved: set[str]) -> tuple[list[
 
     pending: list[tuple[str, str, Path]] = []
     for category_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        src_dir = category_dir / 'src'
-        if not src_dir.is_dir():
-            continue
-        for script_path in sorted(src_dir.glob('*.py')):
+        for algo_dir in sorted(p for p in category_dir.iterdir() if p.is_dir()):
+            # Prefer <algo_dir>/<algo_dir>.py; fall back to first .py file
+            script_path = algo_dir / f"{algo_dir.name}.py"
+            if not script_path.is_file():
+                candidates = [
+                    s for s in algo_dir.glob('*.py')
+                    if s.name != '__init__.py'
+                ]
+                if not candidates:
+                    continue
+                script_path = candidates[0]
             name = script_path.stem
-            slug = _normalize_algo_key(f"{category_dir.name}/{name}")
             pending.append((category_dir.name, name, script_path))
 
     name_counts = Counter(name.lower() for _, name, _ in pending)
@@ -88,7 +94,7 @@ EXTERNAL_ALGORITHMS, EXTERNAL_ALGO_ALIASES = _discover_external_algorithms(SCRIP
 def list_available_algorithms() -> None:
     if not EXTERNAL_ALGORITHMS:
         print(f"No external algorithms found under {SCRIPTS_ROOT}.")
-        print('Add scripts in <category>/src/*.py to make them discoverable.')
+        print('Add scripts in <category>/<algorithm>/<algorithm>.py to make them discoverable.')
         return
     print('Available algorithms (use -a <alias>):')
     grouped: dict[str, list[ExternalAlgorithm]] = {}
@@ -129,11 +135,17 @@ class SingleValueAction(argparse.Action):
 
 
 def run_external_algorithm(meta: ExternalAlgorithm, image_path: Path, output_path: Path, extra_args: str) -> None:
-    cmd = [sys.executable, str(meta.path), str(image_path)]
+    """Run an external algorithm script as a subprocess.
+
+    CLI contract: ``<script> <input_image> <output_path> [extra flags ...]``
+    The subprocess inherits PYTHONPATH so ``from lib import ...`` works.
+    """
+    env = os.environ.copy()
+    env['PYTHONPATH'] = str(PROJECT_ROOT) + os.pathsep + env.get('PYTHONPATH', '')
+    cmd = [sys.executable, str(meta.path), str(image_path), str(output_path)]
     if extra_args:
         cmd.extend(shlex.split(extra_args))
-    cmd.extend(['-o', str(output_path)])
-    subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
+    subprocess.run(cmd, check=True, cwd=PROJECT_ROOT, env=env)
 
 def load_mapping(map_file: Path) -> dict:
     if map_file.exists():

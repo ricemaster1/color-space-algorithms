@@ -8,16 +8,11 @@ import sys
 from pathlib import Path
 from typing import Iterable, Tuple
 
-# Ensure lib is importable when run as a script
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from lib import ARMLITE_RGB
-from distance_ciede2000 import rgb_to_lab, delta_e_ciede2000
-from distance_cie94 import delta_e_cie94
-from distance_cie76 import delta_e_cie76
+from lib.algorithms.distance_metrics.distance_ciede2000.distance_ciede2000 import rgb_to_lab, delta_e_ciede2000
+from lib.algorithms.distance_metrics.distance_cie94.distance_cie94 import delta_e_cie94
+from lib.algorithms.distance_metrics.distance_cie76.distance_cie76 import delta_e_cie76
 
 
 class NeoDeltaEQuantizer:

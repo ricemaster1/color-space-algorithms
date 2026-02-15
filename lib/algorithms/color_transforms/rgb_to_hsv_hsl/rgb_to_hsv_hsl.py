@@ -17,11 +17,6 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-# Ensure lib is importable when run as a script
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _SCRIPT_DIR.parent.parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from lib.palette import ARMLITE_RGB, ARMLITE_COLORS, closest_color
 from lib.truecolor import rgb_to_hex, generate_truecolor_assembly
