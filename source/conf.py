@@ -24,8 +24,23 @@ root_doc = 'index'
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.mathjax",
     "myst_parser",
 ]
+
+# MyST: enable dollar-sign math ($...$, $$...$$) and AMS environments
+myst_enable_extensions = [
+    "dollarmath",
+    "amsmath",
+    "colon_fence",
+]
+
+# MathJax 3 config (loaded automatically by sphinx.ext.mathjax)
+mathjax3_config = {
+    "tex": {
+        "packages": {"[+]": ["ams"]},
+    },
+}
 
 source_suffix = {
     ".rst": "restructuredtext",
