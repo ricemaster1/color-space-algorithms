@@ -1,0 +1,16 @@
+# ── GitHub Linguist overrides ──
+# Mark non-Python assets so GitHub shows Python as the primary language.
+
+# Sphinx / docs source
+source/**            linguist-documentation
+*.md                 linguist-documentation
+*.rst                linguist-documentation
+
+# Saved reference papers (HTML/JS/CSS)
+**/papers/**         linguist-vendored
+
+# Static assets for Sphinx theme
+source/_static/**    linguist-vendored
+
+# Assembly output files
+*.s                  linguist-generated

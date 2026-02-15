@@ -1,75 +1,130 @@
-# 🟦 Color Space Algorithms using ARMLite Simulator
+# Color Space Algorithms — ARMLite Toolkit
 
-Welcome to the **ARMLite Toolkit** — a modular Python suite for converting images into ARMLite-compatible sprite assembly code. The centerpiece is [`armlite.py`](armlite.py), a powerful CLI orchestrator for color transforms, quantization, dithering, and batch sprite workflows.
+A modular Python toolkit that converts images into ARMLite-compatible sprite
+assembly (`.s`) files. It chains color-space transforms, palette quantization,
+and error-diffusion dithering through a single CLI entry point.
+
+> **ARMLite Simulator** — load the generated `.s` files directly:
+> <https://peterhigginson.co.uk/ARMlite>
 
 ---
 
-## 🎮 What is ARMLite?
-ARMLite is a retro sprite engine and simulator. Try it live: [ARMLite Simulator](https://peterhigginson.co.uk/ARMlite)
-
----
-
-## 🚀 Quickstart: Workflow Demo
+## Quick Start
 
 ```bash
-# 1. Convert images to ARMLite sprite assembly
-python armlite.py convert images/ -O output/ -a quantizer --preview
+# Set up the environment (see setup.md for full OS-specific instructions)
+pip install -r requirements.txt
 
-# 2. List available algorithms
+# Convert a directory of images to ARMLite assembly
+python armlite.py convert images/ -O output/ -a median_cut --preview
+
+# List every discovered algorithm
 python armlite.py convert -a help
 
-# 3. Rename output files interactively or by pattern
+# Batch-rename outputs with a pattern
 python armlite.py rename output/ --mode pattern --pattern "sprite_{index}.s"
 ```
 
-- See [`setup.md`](setup.md) for environment setup on Windows, macOS, and Linux.
-- For full CLI options: `python armlite.py --help`
+See [setup.md](setup.md) for environment setup on **Windows**, **macOS**, and **Linux** (conda, pyenv, direnv).
 
 ---
 
-## 🗂️ Project Structure
+## CLI Reference
 
-- [`armlite.py`](armlite.py) — main CLI entry point and pipeline manager.
-- [`lib/`](lib/) — shared color math, palette, and utility modules.
-- [`lib/algorithms/`](lib/algorithms/) — all quantizers, dithers, distance metrics, and color transforms, organized by type.
- - [`lib/algorithms/color_transforms/`](lib/algorithms/color_transforms/)
- - [`lib/algorithms/distance_metrics/`](lib/algorithms/distance_metrics/)
- - [`lib/algorithms/dithers/`](lib/algorithms/dithers/)
- - [`lib/algorithms/quantizers/`](lib/algorithms/dithers/)
+### `convert`
 
----
+```
+python armlite.py convert [input] [options]
+```
 
-## 🧩 How It Works
-- **Algorithm Discovery:** `armlite.py` auto-detects scripts in `lib/algorithms/` — add new quantizers, dithers, or transforms without changing the main script.
-- **Pipeline Chaining:** Chain color transforms, quantization, and dithering via CLI arguments for custom sprite workflows.
-- **Batch & Mapping:** Supports batch conversion, output mapping, preview generation, and interactive file selection.
-- **Renaming:** Built-in CLI and GUI renaming for post-processing sprite outputs.
+| Flag | Description |
+|---|---|
+| `-O`, `--output-dir` | Directory for `.s` output (default: `output`) |
+| `-a`, `--algo` | Algorithm slug or `help` to list |
+| `-n` | Top-N palette size (default: 3) |
+| `--preview` | Save preview PNGs alongside assembly |
+| `--dry-run` | Print planned actions without writing |
+| `--select-files` | Interactively pick input files |
+| `--map-use` | Route outputs via keyword→folder mapping |
+| `--progress` | Progress bar (`auto` / `on` / `off`) |
 
----
+### `rename`
 
-## 🎨 Color Spaces & Labels
-- **Supported:** RGB, Lab, HSV, XYZ, YCbCr
-- **Distance Metrics:** Euclidean, Delta E (76/94/2000), Mahalanobis
-- **Quantizers:** Median Cut, Octree, KD-Tree, NeuQuant, SOM, Wu, Voronoi, Palette Graph NN
-- **Dithers:** Floyd-Steinberg, Jarvis-Judice-Ninke, Stucki, Sierra, Atkinson
+```
+python armlite.py rename [directory] [options]
+```
 
----
-
-## 📚 Documentation
-
-Full algorithm documentation is hosted on GitHub Pages:
-
-**[📖 Browse the docs →](https://ricemaster1.github.io/color-space-algorithms/)**
-
-Covers every quantizer, dither, distance metric, and color transform with usage instructions, CLI options, and implementation notes.
-
-For environment setup, see [`setup.md`](setup.md).
+| Flag | Description |
+|---|---|
+| `--mode` | `cli` (per-file prompt), `pattern`, or `gui` |
+| `--pattern` | Template with `{stem}`, `{index}`, `{ext}` |
+| `--start` | Start index for pattern mode (default: 1) |
+| `--dry-run` | Preview renames without applying |
+| `--undo` | Undo the most recent rename batch |
 
 ---
 
-## 🔗 External Resources
-- [ARMLite Simulator](https://peterhigginson.co.uk/ARMlite)
+## Project Structure
+
+```
+armlite.py                  CLI entry point & pipeline manager
+lib/
+├── palette.py              Palette extraction helpers
+├── truecolor.py            24-bit color utilities
+├── rename_utils.py         CLI / GUI / pattern rename engine
+├── weight_tuner_gui.py     Interactive weight tuner
+└── algorithms/
+    ├── color_transforms/   RGB ↔ HSV/HSL, Lab, XYZ, YCbCr
+    ├── distance_metrics/   Euclidean, CIE76, CIE94, CIEDE2000, ΔE, Mahalanobis
+    ├── dithers/            Floyd-Steinberg, Atkinson, JJN, Stucki, Sierra
+    └── quantizers/         Median Cut, Octree, KD-Tree, NeuQuant, SOM,
+                            Wu, Voronoi, BSP, Palette Graph NN
+```
+
+Algorithm discovery is automatic — drop a new script into any category's `src/`
+folder and `armlite.py` picks it up at runtime.
 
 ---
 
-> **Tip:** All outputs are compatible with the ARMLite Simulator. For advanced usage, see the docs and explore the modular algorithm folders.
+## Algorithms
+
+### Color Transforms
+RGB ↔ HSV / HSL · RGB ↔ CIE-Lab · RGB ↔ XYZ · RGB ↔ YCbCr
+
+### Distance Metrics
+Euclidean · CIE76 · CIE94 · CIEDE2000 · Delta E · Delta E Neo · Mahalanobis
+
+### Quantizers
+Median Cut · Octree · KD-Tree Palette · NeuQuant · SOM ·
+Wu · Voronoi Palette · BSP Partitioning · K-Means · Palette Graph NN
+
+### Dithers
+Floyd-Steinberg · Jarvis-Judice-Ninke · Stucki · Sierra · Atkinson
+
+---
+
+## Documentation
+
+Full algorithm docs (with LaTeX math, diagrams, and implementation notes) are
+published to **GitHub Pages**:
+
+**[Browse the docs →](https://ricemaster1.github.io/color-space-algorithms/)**
+
+---
+
+## Requirements
+
+- Python ≥ 3.10
+- Pillow, NumPy, SciPy, Matplotlib, webcolors, spectra
+
+Install everything:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## License
+
+See the repository for license details.
