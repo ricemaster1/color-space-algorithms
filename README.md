@@ -56,11 +56,14 @@ python armlite.py rename output/ --mode pattern --pattern "sprite_{index}.s"
 ---
 
 ## 📚 Documentation
-- [Quantizers](docs/quantizers.md)
-- [Dithers](docs/dithers.md)
-- [Distance Metrics](docs/distance-metrics.md)
-- [Color Transforms](docs/color-transforms.md)
-- [Setup Guide](setup.md)
+
+Full algorithm documentation is hosted on GitHub Pages:
+
+**[📖 Browse the docs →](https://ricemaster1.github.io/color-space-algorithms/)**
+
+Covers every quantizer, dither, distance metric, and color transform with usage instructions, CLI options, and implementation notes.
+
+For environment setup, see [`setup.md`](setup.md).
 
 ---
 

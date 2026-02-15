@@ -12,9 +12,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-project = 'armlite'
-copyright = '2026, test'
-author = 'test'
+project = 'ARMLite Algorithm Suite'
+copyright = '2026, ricemaster1'
+author = 'ricemaster1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -38,8 +38,22 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
+html_theme = 'furo'
 html_static_path = ['_static']
-html_extra_path = [
-    "../lib"
-]
+
+html_theme_options = {
+    "light_css_variables": {
+        "color-brand-primary": "#2962ff",
+        "color-brand-content": "#2962ff",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#82b1ff",
+        "color-brand-content": "#82b1ff",
+    },
+    "sidebar_hide_name": False,
+    "navigation_with_keys": True,
+}
+
+
+def setup(app):
+    app.add_css_file('custom.css')

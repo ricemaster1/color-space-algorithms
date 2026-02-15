@@ -1,7 +1,14 @@
+# Files
+*.pdf
+
 # Directories 
 old/
 dev/
 build/
+
+# Algorithm non-Python assets (docs live in source/, papers kept locally)
+lib/algorithms/**/docs/
+lib/algorithms/**/papers/
 
 # macOS
 .DS_Store

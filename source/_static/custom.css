@@ -1,0 +1,65 @@
+/* ── Furo custom overrides ── */
+
+/* Smooth transitions on all major containers */
+.sidebar-drawer,
+.sidebar-container,
+.content,
+.article-container,
+.toc-drawer {
+  transition: background 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+}
+
+/* Sidebar polish */
+.sidebar-drawer {
+  backdrop-filter: blur(6px);
+}
+
+/* Content area subtle lift */
+.content {
+  border-radius: 8px;
+}
+
+/* Search input */
+.sidebar-search input[type="search"],
+.search-bar input[type="search"] {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+.sidebar-search input[type="search"]:focus,
+.search-bar input[type="search"]:focus {
+  box-shadow: 0 0 0 3px var(--color-brand-primary, #2962ff);
+}
+
+/* Toctree links – smooth hover */
+.sidebar-tree a,
+.toctree-l1 > a,
+.toctree-l2 > a {
+  transition: color 0.15s ease, background 0.15s ease;
+  border-radius: 4px;
+}
+
+/* Scrollbar (webkit) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.35);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.55);
+}
+
+/* Admonition note styling */
+.admonition.note {
+  border-radius: 8px;
+}
+
+/* Smooth page-load fade-in */
+.page {
+  animation: fadeIn 0.4s ease-in;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
