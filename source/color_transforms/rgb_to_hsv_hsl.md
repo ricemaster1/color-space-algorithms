@@ -1,4 +1,4 @@
-# `rgb_to_hsv_hsl.py` 
+# Rgb To Hsv Hsl
 
 The `algorithms/color_transforms/src/rgb_to_hsv_hsl.py` module converts arbitrary imagery into ARMLite-compatible sprites. It supports two modes: **True Color** (exact 24-bit RGB via hex values) and **Palette** (quantized to 147 CSS3 named colors using HSV/HSL weighted matching). The script emits `.Resolution`, `.PixelScreen`, and per-pixel stores ready for Peter Higginson's simulator.
 

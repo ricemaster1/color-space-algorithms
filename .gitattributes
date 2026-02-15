@@ -3,6 +3,7 @@
 
 # Sphinx / docs source
 source/**            linguist-documentation
+source/**            export-ignore
 *.md                 linguist-documentation
 *.rst                linguist-documentation
 

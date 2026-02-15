@@ -12,7 +12,12 @@ and error-diffusion dithering through a single CLI entry point.
 ## Quick Start
 
 ```bash
-# Set up the environment (see setup.md for full OS-specific instructions)
+# Clone (skips the Sphinx docs source directory)
+git clone --filter=blob:none --sparse https://github.com/ricemaster1/color-space-algorithms.git
+cd color-space-algorithms
+git sparse-checkout set --no-cone '/*' '!source/'
+
+# Install
 pip install -e .
 
 # Convert a directory of images to ARMLite assembly

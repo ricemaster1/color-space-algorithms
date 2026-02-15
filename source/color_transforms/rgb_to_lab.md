@@ -1,4 +1,4 @@
-# `rgb_to_lab.py`
+# Rgb To Lab
 
 The `algorithms/color_transforms/rgb_to_lab/rgb_to_lab.py` module converts images to ARMlite-compatible sprites using the **CIE L*a*b*** color space for perceptually uniform palette matching.
 
